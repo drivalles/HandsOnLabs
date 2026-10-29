@@ -1,0 +1,25 @@
+go mod init <ruta-del-módulo>    → Crea go.mod en el directorio actual
+go work init                     → Crea go.work para múltiples módulos
+go get <paquete>                 → Añade/actualiza una dependencia
+go mod tidy                      → Sincroniza go.mod y go.sum
+go list -m all                   → Lista todos los módulos del proyecto
+go mod why <paquete>             → Explica por qué se necesita un paquete
+go mod graph                     → Muestra el gráfico de dependencias
+go mod vendor                    → Crea vendor/ con código de dependencias
+go mod verify                    → Verifica hashes de dependencias
+go build                         → Compila el paquete
+go run <archivo.go>              → Compila y ejecuta directamente
+go install                       → Compila e instala en $GOBIN
+go clean                         → Elimina archivos objeto y cachés
+go test                          → Ejecuta las pruebas del paquete
+go test -v                       → Pruebas con información detallada
+go test -coverprofile=cover.out  → Genera perfil de cobertura
+go vet                           → Analiza errores sospechosos
+gofmt -w <archivo.go>            → Formatea el código
+go env                           → Muestra configuración del entorno
+go version                       → Muestra la versión de Go instalada
+go doc <paquete>                 → Muestra documentación en terminal
+go help <comando>                → Ayuda detallada de un comando
+GOOS=windows GOARCH=amd64 go build  → Compila para Windows 64-bit
+GOOS=linux   GOARCH=arm64 go build  → Compila para Linux ARM64
+GOOS=darwin  GOARCH=amd64 go build  → Compila para macOS Intel

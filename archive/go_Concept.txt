@@ -1,0 +1,99 @@
+# Go (Golang): Guía completa
+
+**Go** (también conocido como **Golang**) es un lenguaje de programación **compilado, de tipado estático y de código abierto** creado por Google en **2009**. Sus creadores fueron **Robert Griesemer, Rob Pike y Ken Thompson** (este último, co-creador de Unix y del lenguaje B, precursor de C).
+
+## ¿Por qué se creó?
+
+Google necesitaba un lenguaje que resolviera problemas de los lenguajes existentes (como C++ o Java) en entornos de servidores masivos:
+
+- **Compilación muy rápida** (a diferencia de C++)
+- **Concurrencia sencilla y eficiente** (ideal para servidores)
+- **Sintaxis simple** y fácil de aprender
+- **Gestión de memoria automática** (garbage collector)
+- **Binarios estáticos** sin dependencias externas
+
+## Características principales
+
+| Característica | Descripción |
+|----------------|-------------|
+| **Compilado** | Genera código máquina nativo, muy rápido en ejecución |
+| **Tipado estático** | Los tipos se verifican en compilación |
+| **Garbage Collector** | Gestión automática de memoria |
+| **Goroutines** | Concurrencia ligera (miles de hilos virtuales) |
+| **Channels** | Comunicación segura entre goroutines |
+| **Sin clases** | Usa structs e interfaces (composición sobre herencia) |
+| **Compilación cruzada** | Fácil compilar para Linux, Windows, macOS, ARM… |
+| **Standard library potente** | HTTP, JSON, criptografía, etc., incluidas |
+
+## Ejemplo básico: "Hola mundo"
+
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("¡Hola, mundo!")
+}
+
+## Ejemplo de concurrencia (su gran fortaleza)
+
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func tarea(nombre string) {
+    for i := 1; i <= 3; i++ {
+        fmt.Println(nombre, i)
+        time.Sleep(500 * time.Millisecond)
+    }
+}
+
+func main() {
+    go tarea("A") // goroutine
+    go tarea("B") // goroutine
+    time.Sleep(2 * time.Second)
+}
+
+Con `go` delante de una función, se ejecuta **concurrentemente** con un coste mínimo de recursos.
+
+## ¿Para qué se usa Go?
+
+- **Backend y APIs**: es su nicho principal (REST, gRPC, microservicios)
+- **Infraestructura y DevOps**: Docker, Kubernetes, Terraform, Prometheus están escritos en Go
+- **CLI tools**: muchas herramientas de línea de comandos modernas
+- **Redes y servidores**: proxies, balanceadores, sistemas distribuidos
+- **Blockchain**: Hyperledger, partes de Ethereum
+
+## Ventajas ✅
+
+- Curva de aprendizaje **muy baja** (pocas palabras clave: ~25)
+- **Rendimiento** cercano a C/C++
+- **Concurrencia** integrada y elegante
+- **Formateo unificado** (`gofmt`) → código consistente en equipo
+- **Despliegue simple**: un solo binario
+- Gran ecosistema y comunidad creciente
+
+## Desventajas ❌
+
+- **No tiene genéricos completos** históricamente (se añadieron en Go 1.18, 2022)
+- **Manejo de errores verboso** (`if err != nil` por todos lados)
+- **Menos expresivo** que lenguajes como Rust o Python
+- **No ideal para GUI** ni ciencia de datos / ML (ecosistema limitado ahí)
+- **Garbage collector** puede afectar latencia en casos extremos
+
+## ¿Deberías aprenderlo?
+
+**Sí, si te interesa:**
+- Backend, APIs y microservicios
+- DevOps, cloud e infraestructura
+- Sistemas distribuidos y de alto rendimiento
+
+**Quizá no, si buscas:**
+- Data science / IA (mejor Python)
+- Desarrollo frontend (mejor JS/TS)
+- Sistemas embebidos ultra-optimizados (mejor C/Rust)
+
+¿Quieres que profundice en algún tema concreto? Por ejemplo: **goroutines y channels**, **structs e interfaces**, o **cómo crear una API REST** con Go. 🚀

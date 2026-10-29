@@ -1,0 +1,39 @@
+# Verificar si hay proxies configurados
+echo $HTTP_PROXY
+echo $HTTPS_PROXY
+echo $http_proxy
+echo $https_proxy
+echo $GOPROXY
+
+# Si están configurados, eliminarlos temporalmente
+unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy
+
+# Usar el proxy oficial de Go (requiere internet)
+export GOPROXY=https://proxy.golang.org,direct
+
+# O si NO tienes internet, usar modo directo sin proxy
+export GOPROXY=direct
+unset GOPROXY
+
+
+go get github.com/apapsch/go-jsonmerge/v2
+
+********************
+DNS CONFIGURATION
+
+resolvectl status
+Global
+         Protocols: -LLMNR -mDNS -DNSOverTLS DNSSEC=no/unsupported
+  resolv.conf mode: stub
+        DNS Domain: ~.
+
+Link 2 (enx00e0990938d4)
+    Current Scopes: none
+         Protocols: -DefaultRoute -LLMNR -mDNS -DNSOverTLS DNSSEC=no/unsupported
+
+Link 3 (wlp2s0)
+    Current Scopes: DNS
+         Protocols: +DefaultRoute -LLMNR -mDNS -DNSOverTLS DNSSEC=no/unsupported
+Current DNS Server: 181.225.233.30
+       DNS Servers: 181.225.231.120 181.225.233.40 181.225.231.110 181.225.233.30
+**************************

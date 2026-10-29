@@ -1,0 +1,70 @@
+1. Instalación y Configuración del Entorno
+Ya lo dominas, pero para repasar. Consiste en instalar el compilador, configurar el GOPATH (la carpeta donde se guardan los proyectos y dependencias), el PATH y entender cómo funcionan los módulos (go mod init) para crear proyectos independientes. Herramientas como gopls (autocompletado) y dlv (depuración) son parte de este entorno.
+
+2. Variables, Constantes, Estructuras de Flujo y Datos
+Go es un lenguaje fuertemente tipado. Aquí aprendes a manejar la memoria y el control del programa.
+Variables: Se declaran con var o con el operador de asignación corta := (solo dentro de funciones). Go infiere el tipo automáticamente.
+Constantes: Se declaran con const y su valor no puede cambiar.
+Estructuras de control: if (sin paréntesis), for (Go solo tiene for, que puede actuar como while), y switch (muy potente, no necesita break).
+Tipos de datos: int, float64, string, bool, y los Arrays y Slices (que son arrays dinámicos, la estructura de datos más usada en Go).
+Maps: Diccionarios clave-valor (map[string]int).
+
+3. Funciones, Punteros y Estructuras
+Funciones: Pueden recibir parámetros y devolver múltiples valores (ej. return resultado, err).
+Punteros: Variables que guardan la dirección de memoria de otra variable (*int). En Go se usan mucho para evitar copiar grandes cantidades de datos o para modificar variables originales.
+Estructuras (struct): Son como las clases de otros lenguajes. Agrupan diferentes tipos de datos bajo un mismo nombre. Son la base para crear tipos personalizados.
+
+4. Métodos, Receivers, Interfaces y Composición
+Aquí es donde Go se vuelve orientado a objetos (a su manera).
+Métodos y Receivers: Puedes adjuntar funciones a un struct. El receiver es el parámetro que indica a qué struct pertenece el método. Puede ser por valor (copia) o por puntero (modifica el original).
+Interfaces: Son contratos. Definen qué métodos debe tener un tipo, pero no cómo los implementa. Cualquier struct que tenga esos métodos implementa la interfaz automáticamente (polimorfismo).
+Composición: Go no tiene herencia (no hay extends). En su lugar, se usa la composición: un struct puede embeber (incluir) otro struct para reutilizar su código.
+
+5. Concurrencia en Go, Goroutines y Channels
+Esta es la joya de la corona de Go. Es lo que hace a Go especial para servidores.
+Goroutines: Hilos ligeros gestionados por Go. Solo pones la palabra go antes de una función (ej. go miFuncion()) y esta se ejecuta en segundo plano de forma casi gratuita.
+Channels: Son tuberías para comunicar goroutines de forma segura. Se crean con make(chan int). Sirven para enviar (canal <- dato) y recibir (dato := <-canal) datos sin colisiones de memoria.
+
+6. Testing en Go
+Go trae las pruebas integradas en el lenguaje, no necesitas librerías externas.
+Los archivos de prueba deben terminar en _test.go.
+Las funciones de prueba empiezan con Test (ej. func TestMiFuncion(t *testing.T)).
+Se ejecutan con go test.
+También incluye Benchmarks (pruebas de rendimiento) usando func BenchmarkXxx(b *testing.B).
+
+7. Paquetes Personalizados, Dependencias y Workspaces
+Paquetes: Todo archivo .go pertenece a un paquete. El paquete main es el ejecutable. Puedes crear tus propios paquetes en carpetas separadas e importarlos.
+Dependencias: Se manejan con go get (en tu caso, offline, usando vendor como vimos antes). Se registran en el go.mod y go.sum.
+Workspaces: A partir de Go 1.18, puedes agrupar múltiples módulos (proyectos) en un mismo espacio de trabajo usando un archivo go.work, ideal para trabajar en un proyecto A que depende de un proyecto B local.
+
+8. Desarrollo Web con Go
+Go es un gigante en el backend. Aprenderás:
+A usar el paquete estándar net/http para crear un servidor básico.
+A enrutar peticiones (GET, POST) y manejar JSON.
+Es muy probable que el curso mencione frameworks populares como Gin o Echo, que hacen el desarrollo web mucho más rápido y sencillo.
+
+9. Trabajando con Bases de Datos en Go
+Uso del paquete estándar database/sql.
+Conexión a bases de datos relacionales (PostgreSQL, MySQL) usando drivers específicos.
+Ejecución de consultas (Query, Exec), manejo de Rows y cómo mapear los resultados a structs de Go.
+Es posible que mencione ORMs como GORM para abstraer el SQL.
+
+10. Herramientas para Optimizar el Rendimiento (PGO)
+PGO (Profile-Guided Optimization) es una característica introducida en Go 1.20.
+Consiste en recolectar datos de rendimiento de tu aplicación en producción (usando pprof).
+Esos datos se guardan en un archivo (default.pgo).
+Cuando compilas la aplicación con ese archivo presente, el compilador de Go optimiza el código basándose en cómo se usa realmente en la vida real (por ejemplo, optimizando los if más frecuentes), logrando mejoras de rendimiento de entre un 2% y un 14%.
+
+11. Convenciones y Buenas Prácticas
+Formateo: Usar siempre gofmt (en VS Code se hace al guardar). El código de Go debe verse igual sin importar quién lo escribió.
+Nombres: Usar CamelCase (Mayúscula inicial para exportar fuera del paquete, minúscula para privado).
+Manejo de errores: Go no usa try/catch. Los errores se devuelven como un valor más (if err != nil { ... }) y deben manejarse explícitamente.
+Evitar el uso excesivo de variables globales y mantener las funciones pequeñas.
+
+Cómo estudiar esto en tu entorno offline
+Como ya tienes VS Code, Go 1.26 y gopls configurados, te propongo un plan:
+1. Crea un proyecto para cada tema (go mod init tema1, go mod init tema2, etc.).
+2. Pídele a la IA (a mí) ejemplos prácticos de cada tema. Por ejemplo: "Hazme un ejemplo de Goroutines y Channels que simule una cocina con varios chefs".
+3. Usa dlv para poner breakpoints en los ejemplos más complejos (como los punteros o las interfaces) y ver cómo cambia la memoria.
+
+¿Por cuál de los 11 temas te gustaría que empezáramos a programar ahora mismo? Te puedo escribir el código, explicarte línea por línea y tú lo pruebas en tu VS Code.

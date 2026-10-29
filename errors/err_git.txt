@@ -1,0 +1,38 @@
+========================================================================
+ERROR: fatal: detected dubious ownership in repository at...
+========================================================================
+
+[ DESCRIPCIÓN ]
+Git bloquea la ejecución de comandos (como git status, git commit o 
+incluso la interfaz de control de versiones de VS Code) mostrando un 
+mensaje de "propiedad dudosa" (dubious ownership). Como consecuencia, 
+VS Code puede mostrar falsamente un error indicando que falta 
+configurar el user.name y user.email.
+
+[ CAUSA ]
+Git (desde la versión 2.35.2) incluye una medida de seguridad para 
+evitar que un usuario ejecute comandos en repositorios cuyo 
+propietario sea otro usuario del sistema. Es muy común que ocurra 
+cuando:
+- El repositorio está alojado en un disco duro externo o partición 
+  montada (ej. rutas que empiezan con /media/... o /mnt/...).
+- La carpeta fue clonada o creada por otro usuario (o por root), y 
+  ahora se intenta acceder con una cuenta diferente.
+
+[ SOLUCIÓN ]
+Existen dos formas de solucionarlo:
+
+1. Añadir una excepción de seguridad (Rápida):
+   Indicar a Git que confíe en ese directorio específico ejecutando 
+   en la terminal:
+   
+   git config --global --add safe.directory /ruta/completa/a/tu/repositorio
+
+2. Cambiar el propietario de la carpeta (Definitiva):
+   Si es tu disco y tus archivos, es mejor asignar los permisos 
+   correctos a tu usuario actual de Linux para evitar futuros 
+   problemas:
+   
+   sudo chown -R $USER:$USER /ruta/completa/a/tu/repositorio
+
+========================================================================

@@ -1,0 +1,83 @@
+##Este es el docker compose que uso para correr todos los servicios locales en mi maquina y probar
+
+services:
+  db:
+    image: postgres
+    restart: always
+    #    networks:
+    #      custom_network:
+    #        ipv4_address: 10.5.0.5
+    ports:
+      - "127.90.8.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    environment:
+      POSTGRES_PASSWORD: 0n89ynyYNny0dfy0n8989uy
+
+  prometheus:
+    restart: unless-stopped
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "127.90.8.1:9090:9090"
+    volumes:
+      - ./cfg/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "127.90.8.1:3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./cfg/loki-config.yaml:/etc/loki/local-config.yaml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "127.90.8.1:3000:3000"
+    volumes:
+      - ./cfg/grafana:/etc/grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+
+  alloy:
+    restart: unless-stopped
+    image: grafana/alloy:latest
+    hostname: gva-localhost
+    volumes:
+      - ./logs:/var/log/ldserver
+      - ./cfg/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.90.8.1:12345:12345"
+
+  freeswitch:
+    image: ghcr.io/patrickbaus/freeswitch-docker
+    container_name: freeswitch
+    restart: always
+    cap_add:
+      - SYS_NICE
+    network_mode: "host"
+    volumes:
+      - ./cfg/freeswitch/configs:/etc/freeswitch
+      - ./cfg/freeswitch/logs:/var/log/freeswitch
+      - /etc/localtime:/etc/localtime:ro
+
+volumes:
+  prometheus-data:
+  pgdata:
+
+#networks:
+#  custom_network:
+#    driver: bridge
+#    ipam:
+#      config:
+#        - subnet: 10.5.0.0/24   # <-- Define the subnet range
+#          gateway: 10.5.0.1

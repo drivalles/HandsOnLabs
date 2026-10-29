@@ -1,0 +1,226 @@
+1. Instalación y Configuración del Entorno
+Entrando en acción: El entorno de Go se basa en tres variables principales: GOROOT (dónde está instalado Go), GOPATH (dónde están tus proyectos y descargas) y PATH (para que la terminal reconozca el comando 'go').
+Comandos clave:
+go env: Muestra toda la configuración actual de tu entorno.
+go mod init nombre_del_modulo: Crea el archivo go.mod, que es el corazón de tu proyecto. Sin esto, Go no sabe qué dependencias usar.
+Ejemplo de flujo:
+mkdir mi_proyecto
+cd mi_proyecto
+go mod init github.com/tu_usuario/mi_proyecto
+
+2. Variables, Constantes, Estructuras de Flujo y Datos
+Entrando en acción: Go es estricto. Si declaras una variable y no la usas, el programa no compila.
+Código de ejemplo:
+package main
+import "fmt"
+
+func main() {
+    // Variables
+    var nombre string = "Adrian"
+    edad := 30 // Asignación corta, infiere que es un int
+
+    // Constante
+    const pi = 3.1416
+
+    // Slices (arrays dinámicos)
+    frutas := []string{"manzana", "pera"}
+    frutas = append(frutas, "uva") // Agrega un elemento
+
+    // Map (diccionario)
+    edades := make(map[string]int)
+    edades["Adrian"] = 30
+
+    // Control de flujo
+    if edad > 18 {
+        fmt.Println("Mayor de edad")
+    }
+
+    // Go solo tiene 'for', pero sirve para todo
+    for i, fruta := range frutas {
+        fmt.Println(i, fruta)
+    }
+}
+
+3. Funciones, Punteros y Estructuras
+Entrando en acción: Los punteros son cruciales. Si pasas un struct a una función sin puntero, se pasa una copia (no modifica el original).
+Código de ejemplo:
+package main
+import "fmt"
+
+// Estructura
+type Usuario struct {
+    Nombre string
+    Edad   int
+}
+
+// Función que devuelve múltiples valores
+func crearUsuario(nombre string, edad int) (Usuario, error) {
+    if edad < 0 {
+        return Usuario{}, fmt.Errorf("edad inválida")
+    }
+    return Usuario{Nombre: nombre, Edad: edad}, nil
+}
+
+// Función con puntero: modifica el original
+func cumplirAnios(u *Usuario) {
+    u.Edad++
+}
+
+func main() {
+    u, err := crearUsuario("Adrian", 30)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    cumplirAnios(&u) // Se pasa la dirección de memoria
+    fmt.Println(u.Edad) // Imprime 31
+}
+
+4. Métodos, Receivers, Interfaces y Composición
+Entrando en acción: Las interfaces permiten el polimorfismo. Cualquier struct que implemente los métodos de la interfaz puede ser tratado como esa interfaz.
+Código de ejemplo:
+package main
+import "fmt"
+
+// Interfaz
+type Volador interface {
+    Volar() string
+}
+
+// Estructuras
+type Pajaro struct{ Nombre string }
+type Avion struct{ Modelo string }
+
+// Métodos (Receivers)
+func (p Pajaro) Volar() string {
+    return p.Nombre + " está volando"
+}
+func (a Avion) Volar() string {
+    return a.Modelo + " está despegando"
+}
+
+// Composición (embeber un struct)
+type SuperPajaro struct {
+    Pajaro // Hereda el método Volar de Pajaro
+    Poder  string
+}
+
+func main() {
+    // Polimorfismo
+    cosasQueVuelan := []Volador{Pajaro{"Tweety"}, Avion{"Boeing 747"}}
+    for _, cosa := range cosasQueVuelan {
+        fmt.Println(cosa.Volar())
+    }
+}
+
+5. Concurrencia en Go, Goroutines y Channels
+Entrando en acción: Go maneja miles de goroutines sin problema. Los channels evitan las condiciones de carrera (data races).
+Código de ejemplo:
+package main
+import (
+    "fmt"
+    "time"
+)
+
+func trabajador(id int, canal chan string) {
+    time.Sleep(1 * time.Second)
+    canal <- fmt.Sprintf("Trabajador %d terminó", id)
+}
+
+func main() {
+    // Canal con buffer (puede guardar 3 mensajes sin bloquear)
+    canal := make(chan string, 3)
+
+    for i := 1; i <= 3; i++ {
+        go trabajador(i, canal) // Lanza 3 goroutines
+    }
+
+    // Espera a recibir los 3 mensajes
+    for i := 0; i < 3; i++ {
+        fmt.Println(<-canal)
+    }
+}
+
+6. Testing en Go
+Entrando en acción: El archivo debe llamarse igual que el archivo a probar pero con _test al final.
+Código de ejemplo (archivo calculos_test.go):
+package main
+import "testing"
+
+func TestSuma(t *testing.T) {
+    resultado := 2 + 2
+    esperado := 4
+    if resultado != esperado {
+        t.Errorf("Fallo: esperaba %d, obtuve %d", esperado, resultado)
+    }
+}
+Para correrlo en terminal: go test -v
+
+7. Paquetes Personalizados, Dependencias y Workspaces
+Entrando en acción: Si creas una carpeta llamada "matematicas" con funciones, puedes importarla en tu main.
+Estructura:
+mi_proyecto/
+├── go.mod
+├── main.go
+└── matematicas/
+    └── suma.go
+En suma.go:
+package matematicas
+func Sumar(a, b int) int { return a + b }
+En main.go:
+import "mi_proyecto/matematicas"
+func main() { matematicas.Sumar(2, 2) }
+
+8. Desarrollo Web con Go
+Entrando en acción: Go tiene un servidor HTTP en su librería estándar (net/http), sin necesidad de frameworks.
+Código de ejemplo:
+package main
+import (
+    "fmt"
+    "net/http"
+)
+
+func holaMundo(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Hola desde el servidor Go")
+}
+
+func main() {
+    http.HandleFunc("/", holaMundo)
+    // El servidor corre en http://localhost:8080
+    http.ListenAndServe(":8080", nil)
+}
+
+9. Trabajando con Bases de Datos en Go
+Entrando en acción: Go usa database/sql para abstraerse del motor de base de datos.
+Código de ejemplo:
+import (
+    "database/sql"
+    _ "github.com/lib/pq" // Driver de PostgreSQL
+)
+func main() {
+    db, err := sql.Open("postgres", "user=postgres dbname=test sslmode=disable")
+    if err != nil { panic(err) }
+    defer db.Close()
+
+    // Insertar
+    _, err = db.Exec("INSERT INTO usuarios (nombre) VALUES ($1)", "Adrian")
+    // Consultar
+    rows, _ := db.Query("SELECT id, nombre FROM usuarios")
+    defer rows.Close()
+    for rows.Next() {
+        var id int
+        var nombre string
+        rows.Scan(&id, &nombre)
+    }
+}
+
+10. Herramientas para Optimizar el Rendimiento (PGO)
+Entrando en acción: Se usa el perfil de CPU. En tu código importas "runtime/pprof", generas un archivo profile.pgo con las métricas de uso, y luego compilas con:
+go build -pgo=profile.pgo main.go
+El compilador optimiza las ramas (if/else) que más se ejecutan.
+
+11. Convenciones y Buenas Prácticas
+Entrando en acción:
+Usa nombres cortos: "i" para índices, "r" para readers.
+Exportación: Si una variable empieza con mayúscula (ej. Nombre), es pública. Si es minúscula (nombre), es privada del paquete.
+Errores: Nunca ignores un error. Si no quieres manejarlo, asigna el underscore: _ = funcionQueDaError(). Aunque lo ideal es if err != nil.

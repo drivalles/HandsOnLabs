@@ -1,0 +1,12 @@
+http://mirror.tw.ossplanet.net/mirror/ubuntu/pool/main/g/golang-1.26/
+https://mirrors4.qlu.edu.cn/ubuntu/pool/universe/g/gopls/
+
+
+dlv_1.26.0_linux_amd64.tar.gz
+
+delve_1.27.1-4.debian.tar.xz	10.2 KiB	2026-09-27 13:07
+delve_1.27.1-4.dsc	2.6 KiB	2026-09-27 13:07
+delve_1.27.1-4_amd64.deb	4.7 MiB	2026-09-27 13:22
+delve_1.27.1-4_amd64v3.deb	4.7 MiB	2026-09-27 13:22
+delve_1.27.1-4_arm64.deb	3.8 MiB	2026-09-27 13:22
+delve_1.27.1.orig.tar.xz	6.4 MiB	2026-08-18 13:55

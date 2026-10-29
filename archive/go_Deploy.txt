@@ -1,0 +1,46 @@
+DEFINICIONES
+
+- GoLang (Go): Lenguaje de programación compilado y de código abierto creado por Google. Sirve para construir sistemas simples, seguros y escalables, especialmente servicios en la nube, herramientas CLI y microservicios.
+- gopls: Servidor de lenguaje oficial de Go (Go language server). Sirve para que Visual Studio Code tenga autocompletado, ir a definición, diagnósticos en tiempo real, refactorización y navegación de código.
+- Delve (dlv): Depurador (debugger) para Go. Sirve para poner puntos de interrupción, inspeccionar variables, avanzar paso a paso y entender qué hace tu programa en ejecución.
+
+COMBINACIÓN RECOMENDADA
+
+- Go 1.26, Gopls 0.22 (Go Please) y Delve 1.27 forman una combinación perfecta y estable para desarrollo con Visual Studio Code en Linux. gopls 0.22 está disponible en repositorios de distribuciones como Arch Linux , y Delve 1.27 incluye correcciones de compatibilidad con Go 1.27 manteniendo soporte para versiones anteriores . Esta trilogía garantiza que el autocompletado, la navegación de código y la depuración funcionen sin conflictos.
+
+PASOS DE INSTALACIÓN EN LINUX
+
+GoLang (Go) 1.26
+- Confirma la arquitectura de tu sistema con: uname -m. Si muestra x86_64 usa amd64; si muestra aarch64 usa arm64 [citation:1].
+- Descarga el archivo binario oficial. Para x86_64: wget https://go.dev/dl/go1.26.0.linux-amd64.tar.gz. Para ARM: wget https://go.dev/dl/go1.26.0.linux-arm64.tar.gz [citation:1].
+- Elimina cualquier instalación previa de Go para evitar archivos obsoletos: sudo rm -rf /usr/local/go [citation:1][citation:4].
+- Descomprime el archivo en /usr/local: sudo tar -C /usr/local -xzf go1.26.0.linux-amd64.tar.gz [citation:1].
+- Edita tu archivo de configuración de shell. Si usas bash: vim ~/.bashrc. Si usas zsh: vim ~/.zshrc [citation:1].
+- Añade estas líneas al final del archivo:
+  export GOROOT=/usr/local/go
+  export GOPATH=$HOME/go
+  export GOBIN=$GOPATH/bin
+  export PATH=$PATH:$GOROOT/bin:$GOBIN
+- Recarga la configuración: source ~/.bashrc (o source ~/.zshrc si usas zsh) [citation:1].
+- Verifica la instalación abriendo una terminal NUEVA y ejecutando: go version. Debe mostrar go version go1.26.0 linux/amd64 (o arm64) [citation:1].
+
+gopls 0.22
+- Asegúrate de que Go 1.26 esté funcionando con go version.
+- Ejecuta en la terminal: go install golang.org/x/tools/gopls@v0.22.0
+- El binario se instalará en $GOPATH/bin, que en tu configuración es $HOME/go/bin. Verifica que esa ruta esté incluida en el PATH (ya la añadiste en el paso de Go) [citation:1].
+- Abre Visual Studio Code, ve a Extensiones (Ctrl+Shift+X), busca "Go" e instala la extensión oficial "Go" de "Go Team at Google". Esta extensión detecta y utiliza gopls automáticamente [citation:5].
+- Reinicia Visual Studio Code. Al abrir un archivo .go, gopls se activará automáticamente.
+- Si necesitas verificar que gopls está instalado, ejecuta en terminal: ls $HOME/go/bin/gopls
+
+Delve (dlv) 1.27
+- Asegúrate de que Go 1.26 esté funcionando y que $HOME/go/bin esté en el PATH.
+- Ejecuta en la terminal: go install github.com/go-delve/delve/cmd/dlv@v1.27.0
+- Verifica la instalación con: dlv version. Debe mostrar la versión 1.27.0.
+- En Visual Studio Code, la extensión oficial "Go" ya integra soporte para Delve. No necesitas instalar nada adicional en el editor.
+- Para depurar: abre la carpeta de tu proyecto Go (que debe contener un archivo go.mod), coloca un punto de interrupción haciendo clic a la izquierda del número de línea, y presiona F5. Visual Studio Code creará automáticamente la configuración necesaria en .vscode/launch.json.
+- Si la depuración falla, abre la paleta de comandos (Ctrl+Shift+P) y ejecuta "Go: Install/Update Tools", selecciona dlv y acepta para reinstalar.
+
+
+go version
+gopls version
+dlv version
