@@ -2,7 +2,7 @@
 
 **Go** (también conocido como **Golang**) es un lenguaje de programación **compilado, de tipado estático y de código abierto** creado por Google en **2009**. Sus creadores fueron **Robert Griesemer, Rob Pike y Ken Thompson** (este último, co-creador de Unix y del lenguaje B, precursor de C).
 
-## ¿Por qué se creó?
+## ¿Por qué se creó? 
 
 Google necesitaba un lenguaje que resolviera problemas de los lenguajes existentes (como C++ o Java) en entornos de servidores masivos:
 
