@@ -1,0 +1,26 @@
+ACTUALIZAR PROYECTO EN GITHUB (NUEVOS CAMBIOS)
+
+CICLO DE ACTUALIZACIÓN (3 PASOS)
+
+1. HACER LOS CAMBIOS EN TUS ARCHIVOS
+   Modifica, crea o elimina archivos en tu proyecto local
+
+2. PREPARAR Y CONFIRMAR (commit)
+   git add .
+   git commit -m "Descripción breve de lo que cambiaste"
+
+3. SUBIR A GITHUB (push)
+   git push
+   Ya configuraste upstream con -u la primera vez, ahora solo git push
+
+DESDE LA INTERFAZ DE VS CODE
+   Panel de Git (Ctrl+Shift+G)
+   Clic en "+" junto a "Changes" para preparar todo
+   Escribe el mensaje y pulsa "✓ Commit"
+   Pulsa "Sync Changes" (o "..." → Push)
+
+BUENAS PRÁCTICAS
+   Commits pequeños y frecuentes
+   Mensajes descriptivos ("Corrijo error en login" > "cambios")
+   Si trabajas en equipo, haz git pull antes de empezar
+   Verifica en GitHub que el commit apareció (revisa la rama correcta)
