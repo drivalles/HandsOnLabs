@@ -1,12 +1,18 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func main() {
-	fmt.Println("Testing My First Code in GoLang")
+	Welcome()
+	SerieFibonacci()
+}
+func Welcome() {
+	fmt.Println("Hello World")
 
-	var name string = "Adrián"
-	var lastname string = "del Valle Matos"
+	var name string = "Adrian"
+	var lastname string = "del Valle"
 	var age string = "43"
 	var gender string = "M"
 
@@ -16,16 +22,22 @@ func main() {
 		"Gender: " + gender + "\n")
 }
 
-func method() {
-	fmt.Println("This is the line writted in Go code.")
+func SerieFibonacci() {
 
-	var name string = "George"
-	var lastname string = "Washington"
-	var age string = "58860"
-	var gender string = "M"
+	var sum []int
 
-	fmt.Println("Name: " + name + "\n" +
-		"Lastname " + lastname + "\n" +
-		"Age: " + age + "\n" +
-		"Gender: " + gender + "\n")
+	for i := 0; i < 15; i++ {
+		if i == 0 || i == 1 {
+			sum = append(sum, i)
+		} else {
+			sum = append(sum, sum[i-1]+sum[i-2])
+		}
+	}
+
+	// for i := 0; i < len(sum); i++ {
+	// 	fmt.Println(strconv.Itoa(sum[i]) + " ")
+	// }
+	// fmt.Printf("sum: %v\n", sum)
+
+	fmt.Printf("SerieFibonacci %v\n", sum)
 }
