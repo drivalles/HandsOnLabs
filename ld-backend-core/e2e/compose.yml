@@ -1,0 +1,131 @@
+services:
+  postgres:
+    image: postgres:18.6-alpine3.24
+    restart: always
+    command: -c 'max_connections=1000'
+    networks:
+      postgres_network:
+        ipv4_address: 10.5.0.5
+    ports:
+      - "127.90.8.1:5432:5432"
+      #- "192.168.0.103:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    environment:
+      POSTGRES_PASSWORD: 0n89ynyYNny0dfy0n8989uy
+
+  cockroachdb1:
+    image: cockroachdb/cockroach:v25.3.7
+    container_name: cockroach1
+    networks:
+      cockroach_network:
+        ipv4_address: 10.5.1.5
+    environment:
+      - COCKROACH_DATABASE=ldcore
+      - COCKROACH_USER=leaddial
+      - COCKROACH_PASSWORD=90y78dfgsy34587ny9um8h980
+    ports:
+      - "127.90.9.1:26257:26257" # SQL client port
+      - "127.90.9.1:8080:8080"   # Admin UI Dashboard
+      #- "192.168.0.103:26257:26257"
+      #- "192.168.0.103:8080:8080"
+    volumes:
+      - cockroach_data1:/cockroach/cockroach-data
+      - ./cfg/cockroach/certs:/cockroach/cockroach-certs:ro
+    command: start --join=cockroach1:26357,cockroach2:26357,cockroach3:26357 --listen-addr=0.0.0.0:26357 --advertise-addr=10.5.1.5:26357 --sql-addr=0.0.0.0:26257 --certs-dir=/cockroach/cockroach-certs
+
+  cockroachdb2:
+    image: cockroachdb/cockroach:v25.3.7
+    container_name: cockroach2
+    networks:
+      cockroach_network:
+        ipv4_address: 10.5.1.6
+    environment:
+      - COCKROACH_DATABASE=ldcore
+      - COCKROACH_USER=leaddial
+      - COCKROACH_PASSWORD=90y78dfgsy34587ny9um8h980
+    ports:
+      - "127.90.9.2:26257:26257" # SQL client port
+      - "127.90.9.2:8080:8080"   # Admin UI Dashboard
+      #- "192.168.0.103:26257:26257"
+      #- "192.168.0.103:8080:8080"
+    volumes:
+      - cockroach_data2:/cockroach/cockroach-data
+      - ./cfg/cockroach/certs:/cockroach/cockroach-certs:ro
+    command: start --join=cockroach1:26357,cockroach2:26357,cockroach3:26357 --listen-addr=0.0.0.0:26357 --advertise-addr=10.5.1.6:26357 --sql-addr=0.0.0.0:26257 --certs-dir=/cockroach/cockroach-certs
+
+  cockroachdb3:
+    image: cockroachdb/cockroach:v25.3.7
+    container_name: cockroach3
+    networks:
+      cockroach_network:
+        ipv4_address: 10.5.1.7
+    environment:
+      - COCKROACH_DATABASE=ldcore
+      - COCKROACH_USER=leaddial
+      - COCKROACH_PASSWORD=90y78dfgsy34587ny9um8h980
+    ports:
+      - "127.90.9.3:26257:26257" # SQL client port
+      - "127.90.9.3:8080:8080"   # Admin UI Dashboard
+      #- "192.168.0.103:26257:26257"
+      #- "192.168.0.103:8080:8080"
+    volumes:
+      - cockroach_data3:/cockroach/cockroach-data
+      - ./cfg/cockroach/certs:/cockroach/cockroach-certs:ro
+    command: start --join=cockroach1:26357,cockroach2:26357,cockroach3:26357 --listen-addr=0.0.0.0:26357 --advertise-addr=10.5.1.7:26357 --sql-addr=0.0.0.0:26257 --certs-dir=/cockroach/cockroach-certs
+
+  # Transient service to run the initialization command exactly once
+#  cockroachdb-init:
+#    image: cockroachdb/cockroach:v25.3.7
+#    networks:
+#      - cockroach_network
+#    volumes:
+#      - ./cfg/cockroach/certs:/cockroach/cockroach-certs:ro
+#    depends_on:
+#      - cockroachdb1
+#      - cockroachdb2
+#      - cockroachdb3
+#    entrypoint: ["/cockroach/cockroach", "init", "--certs-dir=/cockroach/cockroach-certs", "--host=cockroach1:26357"]
+
+#  cockroachdb-init-user:
+#    image: cockroachdb/cockroach:v25.3.7
+#    depends_on:
+#      - cockroachdb1
+#      - cockroachdb2
+#      - cockroachdb3
+#    volumes:
+#      - ./cfg/cockroach/certs:/cockroach/cockroach-certs:ro
+#    networks:
+#      - cockroach_network
+#    entrypoint: >
+#      bash -c "
+#      ./cockroach sql --certs-dir=/cockroach/cockroach-certs --host=cockroach1:26257 --execute=\"
+#        CREATE USER IF NOT EXISTS leaddial WITH PASSWORD '90y78dfgsy34587ny9um8h980';
+#        CREATE DATABASE IF NOT EXISTS ldcore;
+#        GRANT ALL ON DATABASE ldcore TO leaddial;
+#        ALTER USER leaddial WITH CREATEDB;
+#        ALTER USER leaddial WITH VIEWACTIVITY;
+#        ALTER USER leaddial WITH VIEWACTIVITYREDACTED;
+#      \"
+#      "
+
+volumes:
+  prometheus-data:
+  cockroach_data1:
+  cockroach_data2:
+  cockroach_data3:
+  pgdata:
+
+networks:
+  postgres_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/24   # <-- Define the subnet range
+          gateway: 10.5.0.1
+  cockroach_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.1.0/24   # <-- Define the subnet range
+          gateway: 10.5.1.1
