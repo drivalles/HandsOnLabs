@@ -1,25 +1,18 @@
 services:
-  postgres:
-    image: postgres:18.6-alpine3.24
-    restart: always
-    command: -c 'max_connections=1000'
+  cockroachdb:
+    image: cockroachdb/cockroach:v25.3.7
+    container_name: cockroach-single
+    restart: unless-stopped
     networks:
-      postgres_network:
-        ipv4_address: 10.5.0.5
-    ports:
-      - "127.90.8.1:5432:5432"
-      #- "192.168.0.103:5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql
+      cockroach_network:
+        ipv4_address: 10.5.1.5
     environment:
-      POSTGRES_PASSWORD: 0n89ynyYNny0dfy0n8989uy
-
-volumes:
-  pgdata:
-
-networks:
-  postgres_network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.5.0.0/24
+      - COCKROACH_DATABASE=ldcore
+      - COCKROACH_USER=leaddial
+      - COCKROACH_PASSWORD=90y78dfgsy34587ny9um8h980
+    ports:
+      - "127.0.0.1:26257:26257"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - cockroach_data:/cockroach/cockroach-data
+    command: start-single-node --insecure

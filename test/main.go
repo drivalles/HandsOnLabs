@@ -8,6 +8,7 @@ func main() {
 	Welcome()
 	SerieFibonacci()
 }
+
 func Welcome() {
 	fmt.Println("Hello World")
 
