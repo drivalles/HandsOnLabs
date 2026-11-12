@@ -16,14 +16,14 @@ import (
 
 	"gorm.io/plugin/dbresolver"
 
-	"ld-backend/internal/spec"
+	ldspec "ld-backend/internal/spec"
 )
 
 func newDbSystemAdmin(db *gorm.DB, opts ...gen.DOOption) dbSystemAdmin {
 	_dbSystemAdmin := dbSystemAdmin{}
 
 	_dbSystemAdmin.dbSystemAdminDo.UseDB(db, opts...)
-	_dbSystemAdmin.dbSystemAdminDo.UseModel(&spec.DbSystemAdmin{})
+	_dbSystemAdmin.dbSystemAdminDo.UseModel(&ldspec.DbSystemAdmin{})
 
 	tableName := _dbSystemAdmin.dbSystemAdminDo.TableName()
 	_dbSystemAdmin.ALL = field.NewAsterisk(tableName)
@@ -204,57 +204,57 @@ func (d dbSystemAdminDo) Unscoped() *dbSystemAdminDo {
 	return d.withDO(d.DO.Unscoped())
 }
 
-func (d dbSystemAdminDo) Create(values ...*spec.DbSystemAdmin) error {
+func (d dbSystemAdminDo) Create(values ...*ldspec.DbSystemAdmin) error {
 	if len(values) == 0 {
 		return nil
 	}
 	return d.DO.Create(values)
 }
 
-func (d dbSystemAdminDo) CreateInBatches(values []*spec.DbSystemAdmin, batchSize int) error {
+func (d dbSystemAdminDo) CreateInBatches(values []*ldspec.DbSystemAdmin, batchSize int) error {
 	return d.DO.CreateInBatches(values, batchSize)
 }
 
 // Save : !!! underlying implementation is different with GORM
 // The method is equivalent to executing the statement: db.Clauses(clause.OnConflict{UpdateAll: true}).Create(values)
-func (d dbSystemAdminDo) Save(values ...*spec.DbSystemAdmin) error {
+func (d dbSystemAdminDo) Save(values ...*ldspec.DbSystemAdmin) error {
 	if len(values) == 0 {
 		return nil
 	}
 	return d.DO.Save(values)
 }
 
-func (d dbSystemAdminDo) First() (*spec.DbSystemAdmin, error) {
+func (d dbSystemAdminDo) First() (*ldspec.DbSystemAdmin, error) {
 	if result, err := d.DO.First(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbSystemAdmin), nil
+		return result.(*ldspec.DbSystemAdmin), nil
 	}
 }
 
-func (d dbSystemAdminDo) Take() (*spec.DbSystemAdmin, error) {
+func (d dbSystemAdminDo) Take() (*ldspec.DbSystemAdmin, error) {
 	if result, err := d.DO.Take(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbSystemAdmin), nil
+		return result.(*ldspec.DbSystemAdmin), nil
 	}
 }
 
-func (d dbSystemAdminDo) Last() (*spec.DbSystemAdmin, error) {
+func (d dbSystemAdminDo) Last() (*ldspec.DbSystemAdmin, error) {
 	if result, err := d.DO.Last(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbSystemAdmin), nil
+		return result.(*ldspec.DbSystemAdmin), nil
 	}
 }
 
-func (d dbSystemAdminDo) Find() ([]*spec.DbSystemAdmin, error) {
+func (d dbSystemAdminDo) Find() ([]*ldspec.DbSystemAdmin, error) {
 	result, err := d.DO.Find()
-	return result.([]*spec.DbSystemAdmin), err
+	return result.([]*ldspec.DbSystemAdmin), err
 }
 
-func (d dbSystemAdminDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int) error) (results []*spec.DbSystemAdmin, err error) {
-	buf := make([]*spec.DbSystemAdmin, 0, batchSize)
+func (d dbSystemAdminDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int) error) (results []*ldspec.DbSystemAdmin, err error) {
+	buf := make([]*ldspec.DbSystemAdmin, 0, batchSize)
 	err = d.DO.FindInBatches(&buf, batchSize, func(tx gen.Dao, batch int) error {
 		defer func() { results = append(results, buf...) }()
 		return fc(tx, batch)
@@ -262,7 +262,7 @@ func (d dbSystemAdminDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch in
 	return results, err
 }
 
-func (d dbSystemAdminDo) FindInBatches(result *[]*spec.DbSystemAdmin, batchSize int, fc func(tx gen.Dao, batch int) error) error {
+func (d dbSystemAdminDo) FindInBatches(result *[]*ldspec.DbSystemAdmin, batchSize int, fc func(tx gen.Dao, batch int) error) error {
 	return d.DO.FindInBatches(result, batchSize, fc)
 }
 
@@ -288,23 +288,23 @@ func (d dbSystemAdminDo) Preload(fields ...field.RelationField) *dbSystemAdminDo
 	return &d
 }
 
-func (d dbSystemAdminDo) FirstOrInit() (*spec.DbSystemAdmin, error) {
+func (d dbSystemAdminDo) FirstOrInit() (*ldspec.DbSystemAdmin, error) {
 	if result, err := d.DO.FirstOrInit(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbSystemAdmin), nil
+		return result.(*ldspec.DbSystemAdmin), nil
 	}
 }
 
-func (d dbSystemAdminDo) FirstOrCreate() (*spec.DbSystemAdmin, error) {
+func (d dbSystemAdminDo) FirstOrCreate() (*ldspec.DbSystemAdmin, error) {
 	if result, err := d.DO.FirstOrCreate(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbSystemAdmin), nil
+		return result.(*ldspec.DbSystemAdmin), nil
 	}
 }
 
-func (d dbSystemAdminDo) FindByPage(offset int, limit int) (result []*spec.DbSystemAdmin, count int64, err error) {
+func (d dbSystemAdminDo) FindByPage(offset int, limit int) (result []*ldspec.DbSystemAdmin, count int64, err error) {
 	result, err = d.Offset(offset).Limit(limit).Find()
 	if err != nil {
 		return
@@ -333,7 +333,7 @@ func (d dbSystemAdminDo) Scan(result interface{}) (err error) {
 	return d.DO.Scan(result)
 }
 
-func (d dbSystemAdminDo) Delete(models ...*spec.DbSystemAdmin) (result gen.ResultInfo, err error) {
+func (d dbSystemAdminDo) Delete(models ...*ldspec.DbSystemAdmin) (result gen.ResultInfo, err error) {
 	return d.DO.Delete(models)
 }
 

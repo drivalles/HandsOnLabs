@@ -1,4 +1,4 @@
-package core
+package ldconn
 
 import (
 	"errors"
@@ -20,7 +20,7 @@ type cockroachDialector struct {
 }
 
 func newCockroachDialector(url string) gorm.Dialector {
-	return cockroachDialector{postgres.Dialector{Config: &postgres.Config{DSN: cockroachUrl(url)}}}
+	return cockroachDialector{postgres.Dialector{Config: &postgres.Config{DSN: CockroachUrl(url)}}}
 }
 
 func (d cockroachDialector) Migrator(db *gorm.DB) gorm.Migrator {
@@ -57,7 +57,7 @@ func (m cockroachMigrator) GetTypeAliases(databaseTypeName string) []string {
 
 // cockroachUrl makes the serial ids sequential: by default CockroachDB fills
 // them with unique_rowid(), whose values are too big for javascript numbers.
-func cockroachUrl(url string) string {
+func CockroachUrl(url string) string {
 	const param = "serial_normalization"
 	if strings.Contains(url, param) {
 		return url
@@ -75,15 +75,15 @@ func cockroachUrl(url string) string {
 // txRetries is how many times a transaction is tried before giving up.
 const txRetries = 5
 
-// transaction runs fn in a transaction, running it again when the database
+// Transaction runs fn in a transaction, running it again when the database
 // asks to retry it. CockroachDB runs the transactions serializable and fails
 // the ones conflicting with others with a retry error, so fn must be safe to
 // run more than once.
-func transaction(db *gorm.DB, fn func(tx *gorm.DB) error) error {
+func Transaction(db *gorm.DB, fn func(tx *gorm.DB) error) error {
 	var err error
 	for attempt := 1; attempt <= txRetries; attempt++ {
 		err = db.Transaction(fn)
-		if !isRetryable(err) {
+		if !IsRetryable(err) {
 			return err
 		}
 		time.Sleep(time.Duration(attempt*10+rand.Intn(10)) * time.Millisecond)
@@ -91,9 +91,9 @@ func transaction(db *gorm.DB, fn func(tx *gorm.DB) error) error {
 	return err
 }
 
-// isRetryable tells if the error is a serialization failure, sent when a
+// IsRetryable tells if the error is a serialization failure, sent when a
 // transaction conflicts with another and can be tried again.
-func isRetryable(err error) bool {
+func IsRetryable(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "40001"
 }

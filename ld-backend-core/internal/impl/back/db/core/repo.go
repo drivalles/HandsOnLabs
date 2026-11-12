@@ -1,14 +1,13 @@
-package core
+package ldcore
 
 import (
+	"errors"
 	"fmt"
+	"ld-backend/internal/impl/back/db/conn"
 	"ld-backend/internal/impl/back/db/core/query"
 	"ld-backend/internal/spec"
 	"log/slog"
-	"time"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
@@ -19,7 +18,7 @@ type coreRepoImpl struct {
 	coreQuery *query.Query
 }
 
-func NewCoreRepo(cfg spec.DBConfig) (spec.CoreRepo, error) {
+func NewCoreRepo(cfg ldspec.DBConfig) (ldspec.CoreRepo, error) {
 	driver := cfg.Driver
 	url := fmt.Sprintf(cfg.DbUrlTpl, cfg.CoreDBName)
 	db, err := connect(driver, url)
@@ -34,134 +33,198 @@ func NewCoreRepo(cfg spec.DBConfig) (spec.CoreRepo, error) {
 	return &result, nil
 }
 
-func (t *coreRepoImpl) FindTenant(id string) (*spec.DbTenant, error) {
+// Db is the connection to the core database.
+func (t *coreRepoImpl) Db() *gorm.DB {
+	return t.coreDb
+}
+
+func (t *coreRepoImpl) FindTenant(id string) (*ldspec.DbTenant, error) {
 	return t.coreQuery.DbTenant.
 		Where(t.coreQuery.DbTenant.BusinessId.Eq(id)).
 		First()
 }
 
-func (t *coreRepoImpl) SaveTenant(result *spec.DbTenant) error {
-	return transaction(t.coreDb, func(tx *gorm.DB) error {
+func (t *coreRepoImpl) SaveTenant(result *ldspec.DbTenant) error {
+	return ldconn.Transaction(t.coreDb, func(tx *gorm.DB) error {
 		return tx.Save(result).Error
 	})
 }
 
-func (t *coreRepoImpl) FindCompanies() ([]string, error) {
-	result, err := t.coreQuery.DbGHLAppInstallation.
-		Distinct(t.coreQuery.DbGHLAppInstallation.CompanyId).
-		Find()
+// FindCompanies returns all the GHL companies with the app installed.
+func (t *coreRepoImpl) FindCompanies() ([]*ldspec.DbGHLCompany, error) {
+	return t.coreQuery.DbGHLCompany.Find()
+}
+
+func (t *coreRepoImpl) FindAllLocations() ([]*ldspec.DbGHLLocation, error) {
+	return t.coreQuery.DbGHLLocation.Find()
+}
+
+// FindCompany returns the companies with the GHL company id; company ids are
+// unique, so it has one item at most.
+func (t *coreRepoImpl) FindCompany(companyId string) (*ldspec.DbGHLCompany, error) {
+	c := t.coreQuery.DbGHLCompany
+	return c.Where(c.CompanyId.Eq(companyId)).First()
+}
+
+func (t *coreRepoImpl) FindByAuthCode(authCode string) (*ldspec.DbGHLCompany, *ldspec.DbGHLLocation, error) {
+	ql := t.coreQuery
+	company, err := ql.DbGHLCompany.Where(ql.DbGHLCompany.InstallAuthCode.Eq(authCode)).First()
+	if err == nil {
+		return company, nil, nil
+	}
+
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, err
+	}
+
+	location, err := ql.DbGHLLocation.Where(ql.DbGHLLocation.InstallAuthCode.Eq(authCode)).First()
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, location, nil
+}
+
+// SaveCompanyAppInstall saves the company installed with the authorization
+// code. An authorization code is used once, so when a company was already
+// saved with it, that company is returned unchanged; otherwise the company
+// is saved with the code, updating the one with the same company id.
+func (t *coreRepoImpl) SaveCompanyAppInstall(authCode string, company *ldspec.DbGHLCompany) (*ldspec.DbGHLCompany, error) {
+	var result *ldspec.DbGHLCompany
+	err := ldconn.Transaction(t.coreDb, func(tx *gorm.DB) error {
+		c := query.Use(tx).DbGHLCompany
+		existing, err := c.Where(c.InstallAuthCode.Eq(authCode)).First()
+		if err == nil {
+			result = existing
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		company.InstallAuthCode = &authCode
+		if err := saveCompany(tx, company); err != nil {
+			return err
+		}
+		result = company
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	companyIds := make([]string, 0, len(result))
-	for _, c := range result {
-		if c.CompanyId == nil {
-			continue
-		}
-		companyIds = append(companyIds, *c.CompanyId)
+	return result, nil
+}
+
+// SaveCompany saves the company; a new record updates the existing one with
+// the same company id.
+func (t *coreRepoImpl) SaveCompany(company *ldspec.DbGHLCompany) error {
+	return ldconn.Transaction(t.coreDb, func(tx *gorm.DB) error {
+		return saveCompany(tx, company)
+	})
+}
+
+func saveCompany(tx *gorm.DB, company *ldspec.DbGHLCompany) error {
+	if company.ID != 0 {
+		return tx.Save(company).Error
 	}
-	return companyIds, nil
+	// a new record updates the company with the same id, restoring it when
+	// deleted, and gets its id and creation time back
+	c := query.Use(tx).DbGHLCompany
+	updates := clause.AssignmentColumns([]string{
+		string(c.Name.ColumnName()),
+		string(c.InstallAuthCode.ColumnName()),
+		string(c.AccessToken.ColumnName()),
+		string(c.RefreshToken.ColumnName()),
+		string(c.UserId.ColumnName()),
+		string(c.ExpiresIn.ColumnName()),
+		string(c.UpdatedAt.ColumnName()),
+	})
+	updates = append(updates, clause.Assignment{Column: clause.Column{Name: string(c.DeletedAt.ColumnName())}, Value: nil})
+	return c.Clauses(
+		clause.OnConflict{
+			Columns:   []clause.Column{{Name: string(c.CompanyId.ColumnName())}},
+			DoUpdates: updates,
+		},
+		clause.Returning{},
+	).Create(company)
 }
 
-func (t *coreRepoImpl) GetLatestInstall(companyId string) (*spec.DbGHLAppInstallation, error) {
-	item, err := t.coreQuery.DbGHLAppInstallation.
-		Where(t.coreQuery.DbGHLAppInstallation.CompanyId.Eq(companyId)).
-		Where(t.coreQuery.DbGHLAppInstallation.LocationId.IsNull()).
-		Order(t.coreQuery.DbGHLAppInstallation.CreatedAt.Desc()).
-		First()
-	return item, err
+// FindLocations returns the locations of the company.
+func (t *coreRepoImpl) FindLocations(companyId string) ([]*ldspec.DbGHLLocation, error) {
+	l := t.coreQuery.DbGHLLocation
+	return l.Where(l.CompanyId.Eq(companyId)).Find()
 }
 
-func (t *coreRepoImpl) GetLatestAccess(locationId string) (*spec.DbGHLAppInstallation, error) {
-	items, err := t.coreQuery.DbGHLAppInstallation.
-		Where(t.coreQuery.DbGHLAppInstallation.LocationId.Eq(locationId)).
-		Order(t.coreQuery.DbGHLAppInstallation.CreatedAt.Desc()).
-		First()
-	return items, err
+// FindLocation finds the location by its GHL location id.
+func (t *coreRepoImpl) FindLocation(locationId string) (*ldspec.DbGHLLocation, error) {
+	l := t.coreQuery.DbGHLLocation
+	return l.Where(l.LocationId.Eq(locationId)).First()
 }
 
-func (t *coreRepoImpl) FindByCompanyAndAuthCode(companyId string, authCode string) (*spec.DbGHLAppInstallation, error) {
-	return t.coreQuery.DbGHLAppInstallation.
-		Where(t.coreQuery.DbGHLAppInstallation.CompanyId.Eq(companyId)).
-		Where(t.coreQuery.DbGHLAppInstallation.AuthorizationCode.Eq(authCode)).
-		Where(t.coreQuery.DbGHLAppInstallation.LocationId.IsNull()).
-		Order(t.coreQuery.DbGHLAppInstallation.CreatedAt.Desc()).
-		First()
-}
-
-func (t *coreRepoImpl) FindByAuthCode(authCode string) (*spec.DbGHLAppInstallation, error) {
-	return t.coreQuery.DbGHLAppInstallation.
-		Where(t.coreQuery.DbGHLAppInstallation.AuthorizationCode.Eq(authCode)).
-		Where(t.coreQuery.DbGHLAppInstallation.LocationId.IsNull()).
-		Order(t.coreQuery.DbGHLAppInstallation.CreatedAt.Desc()).
-		First()
-}
-
-func (t *coreRepoImpl) SaveAppInstall(install *spec.DbGHLAppInstallation) error {
-	return transaction(t.coreDb, func(tx *gorm.DB) error {
-		return tx.Save(install).Error
+// SaveLocation saves the location; a new record updates the existing one
+// with the same location id.
+func (t *coreRepoImpl) SaveLocation(location *ldspec.DbGHLLocation) error {
+	return ldconn.Transaction(t.coreDb, func(tx *gorm.DB) error {
+		return saveLocation(tx, location)
 	})
 }
 
-func (t *coreRepoImpl) FindAllAppInstalls() ([]*spec.DbGHLAppInstallation, error) {
-	return t.coreQuery.DbGHLAppInstallation.Find()
-}
-
-func (t *coreRepoImpl) CleanAppInstalls(date time.Time) error {
-	return transaction(t.coreDb, func(tx *gorm.DB) error {
-		q := query.Use(tx)
-		_, err := q.DbGHLAppInstallation.Unscoped().
-			Where(q.DbGHLAppInstallation.CreatedAt.Lt(date)).
-			Delete()
-		return err
+// SaveLocationAppInstall saves the location installed with the authorization
+// code. An authorization code is used once, so when a location was already
+// saved with it, that location is returned unchanged; otherwise the location
+// is saved with the code, updating the one with the same location id.
+func (t *coreRepoImpl) SaveLocationAppInstall(authCode string, location *ldspec.DbGHLLocation) (*ldspec.DbGHLLocation, error) {
+	var result *ldspec.DbGHLLocation
+	err := ldconn.Transaction(t.coreDb, func(tx *gorm.DB) error {
+		l := query.Use(tx).DbGHLLocation
+		existing, err := l.Where(l.InstallAuthCode.Eq(authCode)).First()
+		if err == nil {
+			result = existing
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		location.InstallAuthCode = &authCode
+		if err := saveLocation(tx, location); err != nil {
+			return err
+		}
+		result = location
+		return nil
 	})
-}
-
-func (t *coreRepoImpl) FindInstalledLocations(companyId string) ([]*spec.DbGHLInstalledLocation, error) {
-	install, err := t.GetLatestInstall(companyId)
 	if err != nil {
 		return nil, err
 	}
-	return t.coreQuery.DbGHLInstalledLocation.
-		Where(t.coreQuery.DbGHLInstalledLocation.CompanyId.Eq(*install.CompanyId)).
-		Find()
+	return result, nil
 }
 
-func (t *coreRepoImpl) FindInstalledLocation(locationId string) (*spec.DbGHLInstalledLocation, error) {
-	return t.coreQuery.DbGHLInstalledLocation.
-		Where(t.coreQuery.DbGHLInstalledLocation.LocationId.Eq(locationId)).
-		First()
-}
-
-func (t *coreRepoImpl) SaveInstalledLocation(install *spec.DbGHLInstalledLocation) error {
-	return transaction(t.coreDb, func(tx *gorm.DB) error {
-		if install.ID != 0 {
-			return tx.Save(install).Error
-		}
-		// a new record updates the location with the same id, restoring it
-		// when deleted, and gets its id and creation time back
-		l := query.Use(tx).DbGHLInstalledLocation
-		updates := clause.AssignmentColumns([]string{
-			string(l.CompanyId.ColumnName()),
-			string(l.IsInstalled.ColumnName()),
-			string(l.Name.ColumnName()),
-			string(l.VersionId.ColumnName()),
-			string(l.Address.ColumnName()),
-			string(l.InstalledAt.ColumnName()),
-			string(l.UpdatedAt.ColumnName()),
-		})
-		updates = append(updates, clause.Assignment{Column: clause.Column{Name: string(l.DeletedAt.ColumnName())}, Value: nil})
-		return l.Clauses(
-			clause.OnConflict{
-				Columns:   []clause.Column{{Name: string(l.LocationId.ColumnName())}},
-				DoUpdates: updates,
-			},
-			clause.Returning{},
-		).Create(install)
+func saveLocation(tx *gorm.DB, location *ldspec.DbGHLLocation) error {
+	if location.ID != 0 {
+		return tx.Save(location).Error
+	}
+	// a new record updates the location with the same id, restoring it when
+	// deleted, and gets its id and creation time back
+	l := query.Use(tx).DbGHLLocation
+	updates := clause.AssignmentColumns([]string{
+		string(l.CompanyId.ColumnName()),
+		string(l.Name.ColumnName()),
+		string(l.AccessToken.ColumnName()),
+		string(l.RefreshToken.ColumnName()),
+		string(l.InstallType.ColumnName()),
+		string(l.UserId.ColumnName()),
+		string(l.ExpiresIn.ColumnName()),
+		string(l.InstallAuthCode.ColumnName()),
+		string(l.UpdatedAt.ColumnName()),
 	})
+	updates = append(updates, clause.Assignment{Column: clause.Column{Name: string(l.DeletedAt.ColumnName())}, Value: nil})
+	return l.Clauses(
+		clause.OnConflict{
+			Columns:   []clause.Column{{Name: string(l.LocationId.ColumnName())}},
+			DoUpdates: updates,
+		},
+		clause.Returning{},
+	).Create(location)
 }
 
-func (t *coreRepoImpl) FindServiceAccount(clientId *string) (*spec.DbServiceAccount, error) {
+func (t *coreRepoImpl) FindServiceAccount(clientId *string) (*ldspec.DbServiceAccount, error) {
 	if clientId == nil {
 		return nil, gorm.ErrRecordNotFound
 	}
@@ -170,24 +233,24 @@ func (t *coreRepoImpl) FindServiceAccount(clientId *string) (*spec.DbServiceAcco
 		First()
 }
 
-func (t *coreRepoImpl) SaveServiceAccount(account *spec.DbServiceAccount) error {
-	return transaction(t.coreDb, func(tx *gorm.DB) error {
+func (t *coreRepoImpl) SaveServiceAccount(account *ldspec.DbServiceAccount) error {
+	return ldconn.Transaction(t.coreDb, func(tx *gorm.DB) error {
 		return tx.Save(account).Error
 	})
 }
 
-func (t *coreRepoImpl) FindNode(nodeId string) (*spec.DbServerNode, error) {
+func (t *coreRepoImpl) FindNode(nodeId string) (*ldspec.DbServerNode, error) {
 	return t.coreQuery.DbServerNode.
 		Where(t.coreQuery.DbServerNode.NodeId.Eq(nodeId)).
 		First()
 }
 
-func (t *coreRepoImpl) FindAllNodes() ([]*spec.DbServerNode, error) {
+func (t *coreRepoImpl) FindAllNodes() ([]*ldspec.DbServerNode, error) {
 	return t.coreQuery.DbServerNode.Find()
 }
 
-func (t *coreRepoImpl) SaveNode(node *spec.DbServerNode) error {
-	return transaction(t.coreDb, func(tx *gorm.DB) error {
+func (t *coreRepoImpl) SaveNode(node *ldspec.DbServerNode) error {
+	return ldconn.Transaction(t.coreDb, func(tx *gorm.DB) error {
 		if node.ID != 0 {
 			return tx.Save(node).Error
 		}
@@ -210,9 +273,66 @@ func (t *coreRepoImpl) SaveNode(node *spec.DbServerNode) error {
 	})
 }
 
-func connect(driver spec.LDDatabaseDriver, url string) (*gorm.DB, error) {
+// FindPayments returns the payments of the location, the newest first.
+func (t *coreRepoImpl) FindPayments(locationId string) ([]*ldspec.DbPaymentRecord, error) {
+	p := t.coreQuery.DbPaymentRecord
+	return p.
+		Where(p.LocationId.Eq(locationId)).
+		Order(p.DateTime.Desc(), p.ID.Desc()).
+		Find()
+}
+
+// SavePayment creates or updates the payment record.
+func (t *coreRepoImpl) SavePayment(payment *ldspec.DbPaymentRecord) error {
+	return ldconn.Transaction(t.coreDb, func(tx *gorm.DB) error {
+		return tx.Save(payment).Error
+	})
+}
+
+// FindPaidSubscription returns the paid subscriptions of the location.
+func (t *coreRepoImpl) FindPaidSubscription(locationId string) (*ldspec.DbPaidSubscription, error) {
+	s := t.coreQuery.DbPaidSubscription
+	return s.
+		Where(s.LocationId.Eq(locationId)).
+		Order(s.ID).
+		First()
+}
+
+// SavePaidSubscription saves the paid subscription; a new record updates the
+// existing one with the same location id.
+func (t *coreRepoImpl) SavePaidSubscription(paidSubscription *ldspec.DbPaidSubscription) error {
+	return ldconn.Transaction(t.coreDb, func(tx *gorm.DB) error {
+		if paidSubscription.ID != 0 {
+			return tx.Save(paidSubscription).Error
+		}
+		// a new record updates the subscription of the same location,
+		// restoring it when deleted, and gets its id and creation time back
+		s := query.Use(tx).DbPaidSubscription
+		updates := clause.AssignmentColumns([]string{
+			string(s.BusinessId.ColumnName()),
+			string(s.StripeCustomerId.ColumnName()),
+			string(s.Status.ColumnName()),
+			string(s.MonthlyAmount.ColumnName()),
+			string(s.PerUserAmount.ColumnName()),
+			string(s.AmountDue.ColumnName()),
+			string(s.Accounts.ColumnName()),
+			string(s.LastPayment.ColumnName()),
+			string(s.UpdatedAt.ColumnName()),
+		})
+		updates = append(updates, clause.Assignment{Column: clause.Column{Name: string(s.DeletedAt.ColumnName())}, Value: nil})
+		return s.Clauses(
+			clause.OnConflict{
+				Columns:   []clause.Column{{Name: string(s.LocationId.ColumnName())}},
+				DoUpdates: updates,
+			},
+			clause.Returning{},
+		).Create(paidSubscription)
+	})
+}
+
+func connect(driver ldspec.LDDatabaseDriver, url string) (*gorm.DB, error) {
 	slog.Info("connecting to core database", "module", "db/core")
-	dialector, err := findDialector(driver, url)
+	dialector, err := ldconn.FindDialector(driver, url)
 	if err != nil {
 		return nil, fmt.Errorf("could not find dialector: %w", err)
 	}
@@ -223,24 +343,12 @@ func connect(driver spec.LDDatabaseDriver, url string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("could not connect to database: %w", err)
 	}
 
-	err = db.AutoMigrate(spec.DbCoreTables...)
+	err = ldconn.MigrateIfNeeded(db, "db/core", func() error {
+		return db.AutoMigrate(ldspec.DbCoreTables...)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("could not migrate database: %w", err)
 	}
 
 	return db, nil
-}
-
-func findDialector(driver spec.LDDatabaseDriver, url string) (gorm.Dialector, error) {
-	var dialector gorm.Dialector
-	if driver == spec.PostgresDriver {
-		dialector = postgres.Open(url)
-	} else if driver == spec.CockroachDBDriver {
-		dialector = newCockroachDialector(url)
-	} else if driver == spec.SqliteDriver {
-		dialector = sqlite.Open(url)
-	} else {
-		return nil, fmt.Errorf("unsupported driver %s for url %s", driver, url)
-	}
-	return dialector, nil
 }

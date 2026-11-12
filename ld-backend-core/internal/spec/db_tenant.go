@@ -1,179 +1,10 @@
-package spec
+package ldspec
 
 import (
 	"time"
 
 	"gorm.io/gorm"
 )
-
-// LDActiveStatus is the stored status of a record that can be disabled.
-type LDActiveStatus string
-
-const (
-	// LDActive is an enabled record.
-	LDActive LDActiveStatus = "actv"
-	// LDInactive is a disabled record.
-	LDInactive LDActiveStatus = "inac"
-)
-
-type LDServerNodeStatus string
-
-const (
-	Starting    LDServerNodeStatus = "starting"
-	Live        LDServerNodeStatus = "live"
-	ShutingDown LDServerNodeStatus = "shutingdown"
-	Down        LDServerNodeStatus = "down"
-)
-
-type LDUserAccess string
-
-const (
-	// Dialer can dial
-	Dialer LDUserAccess = "dialer"
-	// Supervisor can manage dialers, contacts, and pipelines and see the dashboard
-	Supervisor LDUserAccess = "supervisor"
-	// Admin can manage dialers, supervisors, contacts, pipelines, and tenants
-	Admin LDUserAccess = "admin"
-	// Owner can manage dialers, supervisors, contacts, pipelines, tenants, and service accounts, it can also call
-	Owner LDUserAccess = "owner"
-)
-
-type DbServiceAccount struct {
-	gorm.Model
-	ClientId     string `gorm:"uniqueIndex"`
-	ClientSecret *string
-	Status       LDActiveStatus `gorm:"type:char(4);index;default:'actv'"`
-}
-
-func (DbServiceAccount) TableName() string {
-	return "service_accounts"
-}
-
-type DbServerNode struct {
-	gorm.Model
-	NodeId        string             `gorm:"uniqueIndex"`
-	Status        LDServerNodeStatus `gorm:"type:varchar(15);index;default:'down'"`
-	LastHeartbeat *time.Time         `gorm:"index"`
-}
-
-func (DbServerNode) TableName() string {
-	return "server_nodes"
-}
-
-// DbSystemAdmin is an administrator of the whole system, kept in the core
-// database.
-type DbSystemAdmin struct {
-	gorm.Model
-	// Username is the unique login name.
-	Username string `gorm:"uniqueIndex"`
-	// Password is the stored password of the admin.
-	Password *string
-	// Status tells whether the admin can log in.
-	Status LDActiveStatus `gorm:"type:char(4);index;default:'actv'"`
-}
-
-// TableName is the table of the system admins.
-func (DbSystemAdmin) TableName() string {
-	return "system_admins"
-}
-
-// DbTenant is a GHL location with its own database, kept in the core
-// database.
-type DbTenant struct {
-	gorm.Model
-	// BusinessId is the GHL location id the tenant belongs to.
-	BusinessId string `gorm:"type:varchar(50);index"`
-	// DbName is the name of the tenant database, the lowercase BusinessId.
-	DbName string `gorm:"type:varchar(50);index"`
-	// Title is the display name of the tenant.
-	Title string `gorm:"type:varchar(100)"`
-	// Url is the connection url of the tenant database.
-	Url string `gorm:"type:varchar(255)"`
-	// Driver is the LDDatabaseDriver of the tenant database.
-	Driver string `gorm:"type:varchar(20);index"`
-	// Status tells whether the tenant is enabled.
-	Status LDActiveStatus `gorm:"type:char(4);index;default:'actv'"`
-}
-
-// TableName is the table of the tenants.
-func (DbTenant) TableName() string {
-	return "tenants"
-}
-
-// DbGHLAppInstallation is a GHL OAuth grant of the app, kept in the core
-// database. A record without LocationId is the company (agency) grant; a
-// record with LocationId is the access token for that location.
-type DbGHLAppInstallation struct {
-	gorm.Model
-	// AuthorizationCode is the OAuth code GHL sent when the app was installed.
-	AuthorizationCode string `gorm:"type:varchar(100)"`
-	// AccessToken is the OAuth token used to call the GHL API.
-	AccessToken *string `gorm:"type:varchar(2048)"`
-	// ApprovedLocations are the location ids approved in a bulk installation.
-	ApprovedLocations *string `gorm:"type:varchar(1024)"`
-	// CompanyId is the GHL company (agency) id.
-	CompanyId *string `gorm:"type:varchar(30)"`
-	// ExpiresIn is the lifetime of the AccessToken in seconds.
-	ExpiresIn *float32 `gorm:"type:decimal(10,2)"`
-	// IsBulkInstallation tells whether the app was installed for many
-	// locations at once.
-	IsBulkInstallation *bool `gorm:"type:boolean"`
-	// LocationId is the GHL location of a location token; nil for the
-	// company grant.
-	LocationId *string `gorm:"type:varchar(30)"`
-	// PlanId is the GHL marketplace plan of the installation.
-	PlanId *string `gorm:"type:varchar(30)"`
-	// RefreshToken is the OAuth token used to get a new AccessToken.
-	RefreshToken *string `gorm:"type:varchar(2048)"`
-	// Scope are the OAuth scopes granted.
-	Scope *string `gorm:"type:varchar(1024)"`
-	// TokenType is the OAuth token type, as Bearer.
-	TokenType *string `gorm:"type:varchar(30)"`
-	// UserId is the GHL user who installed the app.
-	UserId *string `gorm:"type:varchar(30)"`
-	// UserType is the GHL user type of the grant, Company or Location.
-	UserType *string `gorm:"type:varchar(15)"`
-}
-
-// TableName is the table of the GHL app installations.
-func (DbGHLAppInstallation) TableName() string {
-	return "ghl_app_installations"
-}
-
-// DbGHLInstalledLocation is a location of a company where the app is
-// installed, kept in the core database.
-type DbGHLInstalledLocation struct {
-	gorm.Model
-	// CompanyId is the GHL company (agency) id.
-	CompanyId string `gorm:"type:varchar(30)"`
-	// LocationId is the GHL location id.
-	LocationId string `gorm:"type:varchar(30);uniqueIndex"`
-	// Address is the address of the location.
-	Address string `gorm:"type:varchar(1024)"`
-	// InstalledAt is when the app was installed in the location.
-	InstalledAt *time.Time
-	// IsInstalled tells whether the app is installed in the location.
-	IsInstalled *bool `gorm:"type:boolean"`
-	// Name is the name of the location.
-	Name string `gorm:"type:varchar(100)"`
-	// VersionId is the app version installed.
-	VersionId *string `gorm:"type:varchar(100)"`
-}
-
-// TableName is the table of the installed locations.
-func (DbGHLInstalledLocation) TableName() string {
-	return "ghl_installed_locations"
-}
-
-// coreTables are the tables of the core database.
-var DbCoreTables = []interface{}{
-	&DbSystemAdmin{},
-	&DbTenant{},
-	&DbGHLAppInstallation{},
-	&DbGHLInstalledLocation{},
-	&DbServiceAccount{},
-	&DbServerNode{},
-}
 
 // DbUser is a GHL user of the tenant location, the caller of the dialer.
 type DbUser struct {
@@ -234,7 +65,6 @@ type DbContact struct {
 	LastCallTime *time.Time
 	// LastCallAttemptTime is when the contact was last locked to be called.
 	LastCallAttemptTime *time.Time
-	LastSkipTime        *time.Time
 	CallbackTime        *time.Time
 	CallbackUserId      *uint
 	CallbackUser        *DbUser
@@ -453,6 +283,26 @@ func (DbCall) TableName() string {
 	return "calls"
 }
 
+// DbCallHistoryFilter selects the calls of FindCallHistory; the nil and
+// empty fields do not filter.
+type DbCallHistoryFilter struct {
+	// From keeps the calls made at or after it.
+	From *time.Time
+	// To keeps the calls made before it.
+	To *time.Time
+	// CallStatus keeps the calls with the status.
+	CallStatus *string
+	// Outbound keeps the outbound calls when true, the inbound when false.
+	Outbound *bool
+	// UserGHLIds keeps the calls of the users with the GHL ids.
+	UserGHLIds []string
+	// ContactGHLIds keeps the calls of the contacts with the GHL ids.
+	ContactGHLIds []string
+	// Limit is the size of the page and Offset the calls skipped before it.
+	Limit  int
+	Offset int
+}
+
 // DbCacheTime is the expiration of a named cache of GHL data.
 type DbCacheTime struct {
 	// CacheName is the unique name of the cache.
@@ -610,49 +460,6 @@ func (DbCallScript) TableName() string {
 	return "call_scripts"
 }
 
-// CoreRepo is the repository of the core database, with the tenants and the
-// GHL installations.
-type CoreRepo interface {
-	// FindTenant finds the tenant of the GHL location id.
-	FindTenant(id string) (*DbTenant, error)
-	// SaveTenant creates or updates the tenant.
-	SaveTenant(result *DbTenant) error
-	// FindCompanies returns the distinct company ids with installations.
-	FindCompanies() ([]string, error)
-	// GetLatestInstall returns the newest company grant of the company.
-	GetLatestInstall(companyId string) (*DbGHLAppInstallation, error)
-	// GetLatestAccess returns the newest access token of the location.
-	GetLatestAccess(locationId string) (*DbGHLAppInstallation, error)
-	// FindByCompanyAndAuthCode returns the newest company grant of the
-	// company with the authorization code.
-	FindByCompanyAndAuthCode(companyId string, authCode string) (*DbGHLAppInstallation, error)
-	// FindByAuthCode returns the newest company grant with the authorization
-	// code.
-	FindByAuthCode(authCode string) (*DbGHLAppInstallation, error)
-	// SaveAppInstall creates or updates the installation.
-	SaveAppInstall(install *DbGHLAppInstallation) error
-	// FindInstalledLocations returns the installed locations of the company
-	// of the latest company grant.
-	FindInstalledLocations(companyId string) ([]*DbGHLInstalledLocation, error)
-	// FindInstalledLocation finds the installed location by its location id.
-	FindInstalledLocation(locationId string) (*DbGHLInstalledLocation, error)
-	// SaveInstalledLocation saves the installed location; a new record
-	// updates the existing one with the same location id.
-	SaveInstalledLocation(install *DbGHLInstalledLocation) error
-	// FindAllAppInstalls returns all the installations.
-	FindAllAppInstalls() ([]*DbGHLAppInstallation, error)
-	// CleanAppInstalls permanently deletes the installations created before
-	// the date.
-	CleanAppInstalls(date time.Time) error
-
-	FindServiceAccount(clientId *string) (*DbServiceAccount, error)
-	SaveServiceAccount(account *DbServiceAccount) error
-
-	FindNode(nodeId string) (*DbServerNode, error)
-	FindAllNodes() ([]*DbServerNode, error)
-	SaveNode(node *DbServerNode) error
-}
-
 type TenantsManager interface {
 	FindOrCreateTenant(locationId string) (TenantRepo, error)
 	GetTenant(locationId string) (TenantRepo, error)
@@ -696,6 +503,9 @@ type TenantRepo interface {
 	// FindCallsByContact returns the calls of the contact with the GHL id,
 	// newest first.
 	FindCallsByContact(ghlContactId string) ([]*DbCall, error)
+	// FindCallHistory returns the page of the calls matching the filter,
+	// newest first, with the number of calls matching it across all pages.
+	FindCallHistory(filter *DbCallHistoryFilter) ([]*DbCall, int64, error)
 	// FindCallsByDate returns the calls with a contact in the 24 hours from
 	// the date, newest first.
 	FindCallsByDate(date time.Time) ([]*DbCall, error)
@@ -721,6 +531,11 @@ type TenantRepo interface {
 	// UnlockContact releases the contact; it returns false when the lock id
 	// does not hold it.
 	UnlockContact(ghlContactId string, lockId string) (bool, error)
+	// ClearContactCallback clears the callback of the contact, if it has one.
+	ClearContactCallback(ghlContactId string) error
+	// UpdateContactCallback schedules the callback of the contact for the
+	// user; it returns gorm.ErrRecordNotFound when the contact does not exist.
+	UpdateContactCallback(ghlContactId string, userId uint, callbackTime time.Time) error
 	// SaveContact creates or updates the contact.
 	SaveContact(contact *DbContact) error
 
@@ -773,6 +588,10 @@ type TenantRepo interface {
 	// whose contact registered in the last 24 hours; empty when the stage is
 	// not set.
 	FindNewOpportunities() ([]*DbOpportunity, error)
+	// FindCallbackOpportunities returns the opportunities of the contacts
+	// whose callback is due, only the callbacks of callbackUser when it is
+	// not nil.
+	FindCallbackOpportunities(callbackUser *DbUser) ([]*DbOpportunity, error)
 
 	// DeletePipeline permanently deletes the pipeline.
 	DeletePipeline(record *DbPipeline) error
@@ -810,6 +629,9 @@ type TenantRepo interface {
 	SaveUser(user *DbUser) error
 	// FindUsers returns all the users.
 	FindUsers() ([]*DbUser, error)
+	// UpdateUserAccess sets the access of the user with the id; it returns
+	// gorm.ErrRecordNotFound when the user does not exist.
+	UpdateUserAccess(id uint, access LDUserAccess) error
 
 	// GetNewLeadsStage returns the new leads stage with its pipeline; nil
 	// when it is not set.
@@ -851,6 +673,9 @@ type TenantRepo interface {
 	FindDispositionById(id uint) (*DbDisposition, error)
 	// SaveDisposition creates or updates the disposition.
 	SaveDisposition(disposition *DbDisposition) error
+	// FindOrCreateDispositionByName finds the disposition with the name,
+	// creating it when it does not exist.
+	FindOrCreateDispositionByName(name string) (*DbDisposition, error)
 
 	// FindCallScripts returns all the call scripts.
 	FindCallScripts() ([]*DbCallScript, error)
@@ -859,5 +684,19 @@ type TenantRepo interface {
 }
 
 var DbTenantTables = []interface{}{
-	//TODO
+	DbContactTag{},
+	DbDid{},
+	DbOpportunity{},
+	DbPipelineStage{},
+	DbCall{},
+	DbPipeline{},
+	DbContact{},
+	DbUser{},
+	DbCacheTime{},
+	DbTenantSettings{},
+	DbDialerSession{},
+	DbCallScript{},
+	DbTransferContact{},
+	DbDisposition{},
+	DbDidHealthReport{},
 }

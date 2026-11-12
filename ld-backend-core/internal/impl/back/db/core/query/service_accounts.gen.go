@@ -16,14 +16,14 @@ import (
 
 	"gorm.io/plugin/dbresolver"
 
-	"ld-backend/internal/spec"
+	ldspec "ld-backend/internal/spec"
 )
 
 func newDbServiceAccount(db *gorm.DB, opts ...gen.DOOption) dbServiceAccount {
 	_dbServiceAccount := dbServiceAccount{}
 
 	_dbServiceAccount.dbServiceAccountDo.UseDB(db, opts...)
-	_dbServiceAccount.dbServiceAccountDo.UseModel(&spec.DbServiceAccount{})
+	_dbServiceAccount.dbServiceAccountDo.UseModel(&ldspec.DbServiceAccount{})
 
 	tableName := _dbServiceAccount.dbServiceAccountDo.TableName()
 	_dbServiceAccount.ALL = field.NewAsterisk(tableName)
@@ -204,57 +204,57 @@ func (d dbServiceAccountDo) Unscoped() *dbServiceAccountDo {
 	return d.withDO(d.DO.Unscoped())
 }
 
-func (d dbServiceAccountDo) Create(values ...*spec.DbServiceAccount) error {
+func (d dbServiceAccountDo) Create(values ...*ldspec.DbServiceAccount) error {
 	if len(values) == 0 {
 		return nil
 	}
 	return d.DO.Create(values)
 }
 
-func (d dbServiceAccountDo) CreateInBatches(values []*spec.DbServiceAccount, batchSize int) error {
+func (d dbServiceAccountDo) CreateInBatches(values []*ldspec.DbServiceAccount, batchSize int) error {
 	return d.DO.CreateInBatches(values, batchSize)
 }
 
 // Save : !!! underlying implementation is different with GORM
 // The method is equivalent to executing the statement: db.Clauses(clause.OnConflict{UpdateAll: true}).Create(values)
-func (d dbServiceAccountDo) Save(values ...*spec.DbServiceAccount) error {
+func (d dbServiceAccountDo) Save(values ...*ldspec.DbServiceAccount) error {
 	if len(values) == 0 {
 		return nil
 	}
 	return d.DO.Save(values)
 }
 
-func (d dbServiceAccountDo) First() (*spec.DbServiceAccount, error) {
+func (d dbServiceAccountDo) First() (*ldspec.DbServiceAccount, error) {
 	if result, err := d.DO.First(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServiceAccount), nil
+		return result.(*ldspec.DbServiceAccount), nil
 	}
 }
 
-func (d dbServiceAccountDo) Take() (*spec.DbServiceAccount, error) {
+func (d dbServiceAccountDo) Take() (*ldspec.DbServiceAccount, error) {
 	if result, err := d.DO.Take(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServiceAccount), nil
+		return result.(*ldspec.DbServiceAccount), nil
 	}
 }
 
-func (d dbServiceAccountDo) Last() (*spec.DbServiceAccount, error) {
+func (d dbServiceAccountDo) Last() (*ldspec.DbServiceAccount, error) {
 	if result, err := d.DO.Last(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServiceAccount), nil
+		return result.(*ldspec.DbServiceAccount), nil
 	}
 }
 
-func (d dbServiceAccountDo) Find() ([]*spec.DbServiceAccount, error) {
+func (d dbServiceAccountDo) Find() ([]*ldspec.DbServiceAccount, error) {
 	result, err := d.DO.Find()
-	return result.([]*spec.DbServiceAccount), err
+	return result.([]*ldspec.DbServiceAccount), err
 }
 
-func (d dbServiceAccountDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int) error) (results []*spec.DbServiceAccount, err error) {
-	buf := make([]*spec.DbServiceAccount, 0, batchSize)
+func (d dbServiceAccountDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int) error) (results []*ldspec.DbServiceAccount, err error) {
+	buf := make([]*ldspec.DbServiceAccount, 0, batchSize)
 	err = d.DO.FindInBatches(&buf, batchSize, func(tx gen.Dao, batch int) error {
 		defer func() { results = append(results, buf...) }()
 		return fc(tx, batch)
@@ -262,7 +262,7 @@ func (d dbServiceAccountDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch
 	return results, err
 }
 
-func (d dbServiceAccountDo) FindInBatches(result *[]*spec.DbServiceAccount, batchSize int, fc func(tx gen.Dao, batch int) error) error {
+func (d dbServiceAccountDo) FindInBatches(result *[]*ldspec.DbServiceAccount, batchSize int, fc func(tx gen.Dao, batch int) error) error {
 	return d.DO.FindInBatches(result, batchSize, fc)
 }
 
@@ -288,23 +288,23 @@ func (d dbServiceAccountDo) Preload(fields ...field.RelationField) *dbServiceAcc
 	return &d
 }
 
-func (d dbServiceAccountDo) FirstOrInit() (*spec.DbServiceAccount, error) {
+func (d dbServiceAccountDo) FirstOrInit() (*ldspec.DbServiceAccount, error) {
 	if result, err := d.DO.FirstOrInit(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServiceAccount), nil
+		return result.(*ldspec.DbServiceAccount), nil
 	}
 }
 
-func (d dbServiceAccountDo) FirstOrCreate() (*spec.DbServiceAccount, error) {
+func (d dbServiceAccountDo) FirstOrCreate() (*ldspec.DbServiceAccount, error) {
 	if result, err := d.DO.FirstOrCreate(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServiceAccount), nil
+		return result.(*ldspec.DbServiceAccount), nil
 	}
 }
 
-func (d dbServiceAccountDo) FindByPage(offset int, limit int) (result []*spec.DbServiceAccount, count int64, err error) {
+func (d dbServiceAccountDo) FindByPage(offset int, limit int) (result []*ldspec.DbServiceAccount, count int64, err error) {
 	result, err = d.Offset(offset).Limit(limit).Find()
 	if err != nil {
 		return
@@ -333,7 +333,7 @@ func (d dbServiceAccountDo) Scan(result interface{}) (err error) {
 	return d.DO.Scan(result)
 }
 
-func (d dbServiceAccountDo) Delete(models ...*spec.DbServiceAccount) (result gen.ResultInfo, err error) {
+func (d dbServiceAccountDo) Delete(models ...*ldspec.DbServiceAccount) (result gen.ResultInfo, err error) {
 	return d.DO.Delete(models)
 }
 

@@ -16,14 +16,14 @@ import (
 
 	"gorm.io/plugin/dbresolver"
 
-	"ld-backend/internal/spec"
+	ldspec "ld-backend/internal/spec"
 )
 
 func newDbServerNode(db *gorm.DB, opts ...gen.DOOption) dbServerNode {
 	_dbServerNode := dbServerNode{}
 
 	_dbServerNode.dbServerNodeDo.UseDB(db, opts...)
-	_dbServerNode.dbServerNodeDo.UseModel(&spec.DbServerNode{})
+	_dbServerNode.dbServerNodeDo.UseModel(&ldspec.DbServerNode{})
 
 	tableName := _dbServerNode.dbServerNodeDo.TableName()
 	_dbServerNode.ALL = field.NewAsterisk(tableName)
@@ -204,57 +204,57 @@ func (d dbServerNodeDo) Unscoped() *dbServerNodeDo {
 	return d.withDO(d.DO.Unscoped())
 }
 
-func (d dbServerNodeDo) Create(values ...*spec.DbServerNode) error {
+func (d dbServerNodeDo) Create(values ...*ldspec.DbServerNode) error {
 	if len(values) == 0 {
 		return nil
 	}
 	return d.DO.Create(values)
 }
 
-func (d dbServerNodeDo) CreateInBatches(values []*spec.DbServerNode, batchSize int) error {
+func (d dbServerNodeDo) CreateInBatches(values []*ldspec.DbServerNode, batchSize int) error {
 	return d.DO.CreateInBatches(values, batchSize)
 }
 
 // Save : !!! underlying implementation is different with GORM
 // The method is equivalent to executing the statement: db.Clauses(clause.OnConflict{UpdateAll: true}).Create(values)
-func (d dbServerNodeDo) Save(values ...*spec.DbServerNode) error {
+func (d dbServerNodeDo) Save(values ...*ldspec.DbServerNode) error {
 	if len(values) == 0 {
 		return nil
 	}
 	return d.DO.Save(values)
 }
 
-func (d dbServerNodeDo) First() (*spec.DbServerNode, error) {
+func (d dbServerNodeDo) First() (*ldspec.DbServerNode, error) {
 	if result, err := d.DO.First(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServerNode), nil
+		return result.(*ldspec.DbServerNode), nil
 	}
 }
 
-func (d dbServerNodeDo) Take() (*spec.DbServerNode, error) {
+func (d dbServerNodeDo) Take() (*ldspec.DbServerNode, error) {
 	if result, err := d.DO.Take(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServerNode), nil
+		return result.(*ldspec.DbServerNode), nil
 	}
 }
 
-func (d dbServerNodeDo) Last() (*spec.DbServerNode, error) {
+func (d dbServerNodeDo) Last() (*ldspec.DbServerNode, error) {
 	if result, err := d.DO.Last(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServerNode), nil
+		return result.(*ldspec.DbServerNode), nil
 	}
 }
 
-func (d dbServerNodeDo) Find() ([]*spec.DbServerNode, error) {
+func (d dbServerNodeDo) Find() ([]*ldspec.DbServerNode, error) {
 	result, err := d.DO.Find()
-	return result.([]*spec.DbServerNode), err
+	return result.([]*ldspec.DbServerNode), err
 }
 
-func (d dbServerNodeDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int) error) (results []*spec.DbServerNode, err error) {
-	buf := make([]*spec.DbServerNode, 0, batchSize)
+func (d dbServerNodeDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int) error) (results []*ldspec.DbServerNode, err error) {
+	buf := make([]*ldspec.DbServerNode, 0, batchSize)
 	err = d.DO.FindInBatches(&buf, batchSize, func(tx gen.Dao, batch int) error {
 		defer func() { results = append(results, buf...) }()
 		return fc(tx, batch)
@@ -262,7 +262,7 @@ func (d dbServerNodeDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int
 	return results, err
 }
 
-func (d dbServerNodeDo) FindInBatches(result *[]*spec.DbServerNode, batchSize int, fc func(tx gen.Dao, batch int) error) error {
+func (d dbServerNodeDo) FindInBatches(result *[]*ldspec.DbServerNode, batchSize int, fc func(tx gen.Dao, batch int) error) error {
 	return d.DO.FindInBatches(result, batchSize, fc)
 }
 
@@ -288,23 +288,23 @@ func (d dbServerNodeDo) Preload(fields ...field.RelationField) *dbServerNodeDo {
 	return &d
 }
 
-func (d dbServerNodeDo) FirstOrInit() (*spec.DbServerNode, error) {
+func (d dbServerNodeDo) FirstOrInit() (*ldspec.DbServerNode, error) {
 	if result, err := d.DO.FirstOrInit(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServerNode), nil
+		return result.(*ldspec.DbServerNode), nil
 	}
 }
 
-func (d dbServerNodeDo) FirstOrCreate() (*spec.DbServerNode, error) {
+func (d dbServerNodeDo) FirstOrCreate() (*ldspec.DbServerNode, error) {
 	if result, err := d.DO.FirstOrCreate(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbServerNode), nil
+		return result.(*ldspec.DbServerNode), nil
 	}
 }
 
-func (d dbServerNodeDo) FindByPage(offset int, limit int) (result []*spec.DbServerNode, count int64, err error) {
+func (d dbServerNodeDo) FindByPage(offset int, limit int) (result []*ldspec.DbServerNode, count int64, err error) {
 	result, err = d.Offset(offset).Limit(limit).Find()
 	if err != nil {
 		return
@@ -333,7 +333,7 @@ func (d dbServerNodeDo) Scan(result interface{}) (err error) {
 	return d.DO.Scan(result)
 }
 
-func (d dbServerNodeDo) Delete(models ...*spec.DbServerNode) (result gen.ResultInfo, err error) {
+func (d dbServerNodeDo) Delete(models ...*ldspec.DbServerNode) (result gen.ResultInfo, err error) {
 	return d.DO.Delete(models)
 }
 

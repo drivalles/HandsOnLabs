@@ -16,14 +16,14 @@ import (
 
 	"gorm.io/plugin/dbresolver"
 
-	"ld-backend/internal/spec"
+	ldspec "ld-backend/internal/spec"
 )
 
 func newDbTenant(db *gorm.DB, opts ...gen.DOOption) dbTenant {
 	_dbTenant := dbTenant{}
 
 	_dbTenant.dbTenantDo.UseDB(db, opts...)
-	_dbTenant.dbTenantDo.UseModel(&spec.DbTenant{})
+	_dbTenant.dbTenantDo.UseModel(&ldspec.DbTenant{})
 
 	tableName := _dbTenant.dbTenantDo.TableName()
 	_dbTenant.ALL = field.NewAsterisk(tableName)
@@ -216,57 +216,57 @@ func (d dbTenantDo) Unscoped() *dbTenantDo {
 	return d.withDO(d.DO.Unscoped())
 }
 
-func (d dbTenantDo) Create(values ...*spec.DbTenant) error {
+func (d dbTenantDo) Create(values ...*ldspec.DbTenant) error {
 	if len(values) == 0 {
 		return nil
 	}
 	return d.DO.Create(values)
 }
 
-func (d dbTenantDo) CreateInBatches(values []*spec.DbTenant, batchSize int) error {
+func (d dbTenantDo) CreateInBatches(values []*ldspec.DbTenant, batchSize int) error {
 	return d.DO.CreateInBatches(values, batchSize)
 }
 
 // Save : !!! underlying implementation is different with GORM
 // The method is equivalent to executing the statement: db.Clauses(clause.OnConflict{UpdateAll: true}).Create(values)
-func (d dbTenantDo) Save(values ...*spec.DbTenant) error {
+func (d dbTenantDo) Save(values ...*ldspec.DbTenant) error {
 	if len(values) == 0 {
 		return nil
 	}
 	return d.DO.Save(values)
 }
 
-func (d dbTenantDo) First() (*spec.DbTenant, error) {
+func (d dbTenantDo) First() (*ldspec.DbTenant, error) {
 	if result, err := d.DO.First(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbTenant), nil
+		return result.(*ldspec.DbTenant), nil
 	}
 }
 
-func (d dbTenantDo) Take() (*spec.DbTenant, error) {
+func (d dbTenantDo) Take() (*ldspec.DbTenant, error) {
 	if result, err := d.DO.Take(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbTenant), nil
+		return result.(*ldspec.DbTenant), nil
 	}
 }
 
-func (d dbTenantDo) Last() (*spec.DbTenant, error) {
+func (d dbTenantDo) Last() (*ldspec.DbTenant, error) {
 	if result, err := d.DO.Last(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbTenant), nil
+		return result.(*ldspec.DbTenant), nil
 	}
 }
 
-func (d dbTenantDo) Find() ([]*spec.DbTenant, error) {
+func (d dbTenantDo) Find() ([]*ldspec.DbTenant, error) {
 	result, err := d.DO.Find()
-	return result.([]*spec.DbTenant), err
+	return result.([]*ldspec.DbTenant), err
 }
 
-func (d dbTenantDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int) error) (results []*spec.DbTenant, err error) {
-	buf := make([]*spec.DbTenant, 0, batchSize)
+func (d dbTenantDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int) error) (results []*ldspec.DbTenant, err error) {
+	buf := make([]*ldspec.DbTenant, 0, batchSize)
 	err = d.DO.FindInBatches(&buf, batchSize, func(tx gen.Dao, batch int) error {
 		defer func() { results = append(results, buf...) }()
 		return fc(tx, batch)
@@ -274,7 +274,7 @@ func (d dbTenantDo) FindInBatch(batchSize int, fc func(tx gen.Dao, batch int) er
 	return results, err
 }
 
-func (d dbTenantDo) FindInBatches(result *[]*spec.DbTenant, batchSize int, fc func(tx gen.Dao, batch int) error) error {
+func (d dbTenantDo) FindInBatches(result *[]*ldspec.DbTenant, batchSize int, fc func(tx gen.Dao, batch int) error) error {
 	return d.DO.FindInBatches(result, batchSize, fc)
 }
 
@@ -300,23 +300,23 @@ func (d dbTenantDo) Preload(fields ...field.RelationField) *dbTenantDo {
 	return &d
 }
 
-func (d dbTenantDo) FirstOrInit() (*spec.DbTenant, error) {
+func (d dbTenantDo) FirstOrInit() (*ldspec.DbTenant, error) {
 	if result, err := d.DO.FirstOrInit(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbTenant), nil
+		return result.(*ldspec.DbTenant), nil
 	}
 }
 
-func (d dbTenantDo) FirstOrCreate() (*spec.DbTenant, error) {
+func (d dbTenantDo) FirstOrCreate() (*ldspec.DbTenant, error) {
 	if result, err := d.DO.FirstOrCreate(); err != nil {
 		return nil, err
 	} else {
-		return result.(*spec.DbTenant), nil
+		return result.(*ldspec.DbTenant), nil
 	}
 }
 
-func (d dbTenantDo) FindByPage(offset int, limit int) (result []*spec.DbTenant, count int64, err error) {
+func (d dbTenantDo) FindByPage(offset int, limit int) (result []*ldspec.DbTenant, count int64, err error) {
 	result, err = d.Offset(offset).Limit(limit).Find()
 	if err != nil {
 		return
@@ -345,7 +345,7 @@ func (d dbTenantDo) Scan(result interface{}) (err error) {
 	return d.DO.Scan(result)
 }
 
-func (d dbTenantDo) Delete(models ...*spec.DbTenant) (result gen.ResultInfo, err error) {
+func (d dbTenantDo) Delete(models ...*ldspec.DbTenant) (result gen.ResultInfo, err error) {
 	return d.DO.Delete(models)
 }
 

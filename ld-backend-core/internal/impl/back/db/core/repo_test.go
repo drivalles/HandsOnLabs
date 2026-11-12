@@ -1,96 +1,184 @@
-package core
+package ldcore_test
 
 import (
-	"fmt"
-	"ld-backend/internal/impl/utils"
+	ldconn "ld-backend/internal/impl/back/db/conn"
+	"ld-backend/internal/impl/back/db/core"
+	ldutils "ld-backend/internal/impl/core/utils"
 	"ld-backend/internal/spec"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
 func TestMain(m *testing.M) {
-	RunTestsWithDbs(m)
+	ldconn.RunTestsWithDbs(m)
 }
 
-func testMigrations(t *testing.T, d TestDriver) {
+func testMigrations(t *testing.T, d ldconn.TestDriver) {
 	t.Run("migrates the core tables", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		migrator := repo.coreDb.Migrator()
-		for _, table := range spec.DbCoreTables {
+		repo := ldcore.NewTestRepo(t, d)
+		migrator := repo.Db().Migrator()
+		for _, table := range ldspec.DbCoreTables {
 			assert.True(t, migrator.HasTable(table))
 		}
 	})
 
-	t.Run("migrates an existing database again", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		require.NoError(t, repo.coreDb.AutoMigrate(spec.DbCoreTables...))
-	})
-}
+	t.Run("migrates by the schema version", func(t *testing.T) {
+		cfg := ldcore.NewTestDBConfig(t, d)
+		connect := func(t *testing.T) ldcore.TestRepo {
+			t.Helper()
+			return ldcore.ConnectTestRepo(t, cfg)
+		}
+		setVersion := func(t *testing.T, repo ldcore.TestRepo, version string) {
+			t.Helper()
+			require.NoError(t, repo.Db().Create(&ldspec.DbSchemaVersion{Version: version}).Error)
+		}
 
-// coreRepoCases run against every driver in TestCoreRepo.
-var coreRepoCases = []struct {
-	name string
-	run  func(t *testing.T, d TestDriver)
-}{
-	{"Migrations", testMigrations},
-	{"FindTenant", testFindTenant},
-	{"SaveTenant", testSaveTenant},
-	{"FindCompanies", testFindCompanies},
-	{"GetLatestInstall", testGetLatestInstall},
-	{"GetLatestAccess", testGetLatestAccess},
-	{"FindByCompanyAndAuthCode", testFindByCompanyAndAuthCode},
-	{"FindByAuthCode", testFindByAuthCode},
-	{"SaveAppInstall", testSaveAppInstall},
-	{"FindAllAppInstalls", testFindAllAppInstalls},
-	{"CleanAppInstalls", testCleanAppInstalls},
-	{"FindInstalledLocations", testFindInstalledLocations},
-	{"FindInstalledLocation", testFindInstalledLocation},
-	{"SaveInstalledLocation", testSaveInstalledLocation},
-	{"FindServiceAccount", testFindServiceAccount},
-	{"SaveServiceAccount", testSaveServiceAccount},
-	{"FindNode", testFindNode},
-	{"FindAllNodes", testFindAllNodes},
-	{"SaveNode", testSaveNode},
-	{"ConcurrentSaves", testConcurrentSaves},
+		repo := connect(t)
+		version, err := ldconn.SchemaVersion(repo.Db())
+		require.NoError(t, err)
+		assert.Equal(t, ldspec.DB_SCHEMA_VERSION, version, "a new database is migrated")
+
+		// a table dropped stays dropped while the version is current
+		require.NoError(t, repo.Db().Migrator().DropTable(&ldspec.DbServerNode{}))
+		repo = connect(t)
+		assert.False(t, repo.Db().Migrator().HasTable(&ldspec.DbServerNode{}), "current version is not migrated")
+
+		setVersion(t, repo, "99.0.0")
+		repo = connect(t)
+		assert.False(t, repo.Db().Migrator().HasTable(&ldspec.DbServerNode{}), "newer version is not migrated")
+		version, err = ldconn.SchemaVersion(repo.Db())
+		require.NoError(t, err)
+		assert.Equal(t, "99.0.0", version, "newer version is kept")
+
+		setVersion(t, repo, "0.0.1")
+		repo = connect(t)
+		assert.True(t, repo.Db().Migrator().HasTable(&ldspec.DbServerNode{}), "older version is migrated")
+		version, err = ldconn.SchemaVersion(repo.Db())
+		require.NoError(t, err)
+		assert.Equal(t, ldspec.DB_SCHEMA_VERSION, version)
+	})
+
+	t.Run("migrates an existing database again", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.Db().AutoMigrate(ldspec.DbCoreTables...))
+	})
 }
 
 // TestCoreRepo runs all the repo cases with each database driver.
 func TestCoreRepo(t *testing.T) {
-	for _, d := range TestDrivers() {
+	for _, d := range ldconn.TestDrivers() {
 		t.Run(d.Name, func(t *testing.T) {
 			d.Check(t)
-			for _, c := range coreRepoCases {
-				t.Run(c.name, func(t *testing.T) {
-					c.run(t, d)
-				})
-			}
+
+			t.Run("Migrations", func(t *testing.T) {
+				testMigrations(t, d)
+			})
+
+			t.Run("FindTenant", func(t *testing.T) {
+				testFindTenant(t, d)
+			})
+
+			t.Run("SaveTenant", func(t *testing.T) {
+				testSaveTenant(t, d)
+			})
+
+			t.Run("FindCompanies", func(t *testing.T) {
+				testFindCompanies(t, d)
+			})
+
+			t.Run("FindCompany", func(t *testing.T) {
+				testFindCompany(t, d)
+			})
+
+			t.Run("SaveCompany", func(t *testing.T) {
+				testSaveCompany(t, d)
+			})
+
+			t.Run("SaveCompanyAppInstall", func(t *testing.T) {
+				testSaveCompanyAppInstall(t, d)
+			})
+
+			t.Run("FindLocations", func(t *testing.T) {
+				testFindLocations(t, d)
+			})
+
+			t.Run("FindLocation", func(t *testing.T) {
+				testFindLocation(t, d)
+			})
+
+			t.Run("SaveLocation", func(t *testing.T) {
+				testSaveLocation(t, d)
+			})
+
+			t.Run("SaveLocationAppInstall", func(t *testing.T) {
+				testSaveLocationAppInstall(t, d)
+			})
+
+			t.Run("FindServiceAccount", func(t *testing.T) {
+				testFindServiceAccount(t, d)
+			})
+
+			t.Run("SaveServiceAccount", func(t *testing.T) {
+				testSaveServiceAccount(t, d)
+			})
+
+			t.Run("FindNode", func(t *testing.T) {
+				testFindNode(t, d)
+			})
+
+			t.Run("FindAllNodes", func(t *testing.T) {
+				testFindAllNodes(t, d)
+			})
+
+			t.Run("SaveNode", func(t *testing.T) {
+				testSaveNode(t, d)
+			})
+
+			t.Run("FindPayments", func(t *testing.T) {
+				testFindPayments(t, d)
+			})
+
+			t.Run("SavePayment", func(t *testing.T) {
+				testSavePayment(t, d)
+			})
+
+			t.Run("FindPaidSubscription", func(t *testing.T) {
+				testFindPaidSubscription(t, d)
+			})
+
+			t.Run("SavePaidSubscription", func(t *testing.T) {
+				testSavePaidSubscription(t, d)
+			})
+
+			t.Run("ConcurrentSaves", func(t *testing.T) {
+				testConcurrentSaves(t, d)
+			})
 		})
 	}
 }
 
 func TestNewCoreRepo(t *testing.T) {
 	t.Run("unsupported driver", func(t *testing.T) {
-		dbCfg := spec.DBConfig{
+		dbCfg := ldspec.DBConfig{
 			Driver:     "mysql",
 			CoreDBName: "",
 			DbUrlTpl:   "some-url",
 		}
-		repo, err := NewCoreRepo(dbCfg)
+		repo, err := ldcore.NewCoreRepo(dbCfg)
 		require.Error(t, err)
 		assert.Nil(t, repo)
 	})
 }
 
-func testFindTenant(t *testing.T, d TestDriver) {
-	repo := newTestRepo(t, d)
-	require.NoError(t, repo.SaveTenant(&spec.DbTenant{BusinessId: "loc-1", DbName: "loc-1", Title: "Location 1"}))
-	require.NoError(t, repo.SaveTenant(&spec.DbTenant{BusinessId: "loc-2", DbName: "loc-2", Title: "Location 2"}))
+func testFindTenant(t *testing.T, d ldconn.TestDriver) {
+	repo := ldcore.NewTestRepo(t, d)
+	require.NoError(t, repo.SaveTenant(&ldspec.DbTenant{BusinessId: "loc-1", DbName: "loc-1", Title: "Location 1"}))
+	require.NoError(t, repo.SaveTenant(&ldspec.DbTenant{BusinessId: "loc-2", DbName: "loc-2", Title: "Location 2"}))
 
 	t.Run("finds by business id", func(t *testing.T) {
 		tenant, err := repo.FindTenant("loc-2")
@@ -106,15 +194,15 @@ func testFindTenant(t *testing.T, d TestDriver) {
 	})
 }
 
-func testSaveTenant(t *testing.T, d TestDriver) {
+func testSaveTenant(t *testing.T, d ldconn.TestDriver) {
 	t.Run("creates with the default status", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		tenant := &spec.DbTenant{
+		repo := ldcore.NewTestRepo(t, d)
+		tenant := &ldspec.DbTenant{
 			BusinessId: "loc-1",
 			DbName:     "loc-1",
 			Title:      "Location 1",
 			Url:        "file:loc-1",
-			Driver:     string(spec.SqliteDriver),
+			Driver:     string(ldspec.SqliteDriver),
 		}
 		require.NoError(t, repo.SaveTenant(tenant))
 		assert.NotZero(t, tenant.ID)
@@ -122,480 +210,482 @@ func testSaveTenant(t *testing.T, d TestDriver) {
 		found, err := repo.FindTenant("loc-1")
 		require.NoError(t, err)
 		assert.Equal(t, tenant.ID, found.ID)
-		assert.Equal(t, spec.LDActive, found.Status)
+		assert.Equal(t, ldspec.LDActive, found.Status)
 		assert.Equal(t, "file:loc-1", found.Url)
-		assert.Equal(t, string(spec.SqliteDriver), found.Driver)
+		assert.Equal(t, string(ldspec.SqliteDriver), found.Driver)
 	})
 
 	t.Run("updates an existing tenant", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		tenant := &spec.DbTenant{BusinessId: "loc-1", Title: "Old", Status: spec.LDActive}
+		repo := ldcore.NewTestRepo(t, d)
+		tenant := &ldspec.DbTenant{BusinessId: "loc-1", Title: "Old", Status: ldspec.LDActive}
 		require.NoError(t, repo.SaveTenant(tenant))
 
 		tenant.Title = "New"
-		tenant.Status = spec.LDInactive
+		tenant.Status = ldspec.LDInactive
 		require.NoError(t, repo.SaveTenant(tenant))
 
 		found, err := repo.FindTenant("loc-1")
 		require.NoError(t, err)
 		assert.Equal(t, tenant.ID, found.ID)
 		assert.Equal(t, "New", found.Title)
-		assert.Equal(t, spec.LDInactive, found.Status)
+		assert.Equal(t, ldspec.LDInactive, found.Status)
 
 		var count int64
-		require.NoError(t, repo.coreDb.Model(&spec.DbTenant{}).Count(&count).Error)
+		require.NoError(t, repo.Db().Model(&ldspec.DbTenant{}).Count(&count).Error)
 		assert.EqualValues(t, 1, count)
 	})
 }
 
-func testFindCompanies(t *testing.T, d TestDriver) {
-	t.Run("no installations", func(t *testing.T) {
-		repo := newTestRepo(t, d)
+// authCodePtr is the optional authorization code; nil when empty.
+func authCodePtr(authCode string) *string {
+	if authCode == "" {
+		return nil
+	}
+	return &authCode
+}
+
+// company is a GHL company installed with the authorization code.
+func company(companyId string, authCode string) *ldspec.DbGHLCompany {
+	return &ldspec.DbGHLCompany{
+		CompanyId:       companyId,
+		Name:            "Company " + companyId,
+		InstallAuthCode: authCodePtr(authCode),
+		AccessToken:     ldutils.Ptr("access-" + authCode),
+		RefreshToken:    ldutils.Ptr("refresh-" + authCode),
+		UserId:          ldutils.Ptr("user-" + companyId),
+	}
+}
+
+// location is a GHL location of the company installed with the
+// authorization code.
+func location(companyId string, locationId string, authCode string) *ldspec.DbGHLLocation {
+	return &ldspec.DbGHLLocation{
+		CompanyId:       companyId,
+		LocationId:      locationId,
+		Name:            "Location " + locationId,
+		AccessToken:     ldutils.Ptr("access-" + authCode),
+		RefreshToken:    ldutils.Ptr("refresh-" + authCode),
+		InstallType:     ldspec.DbGHLInstallTypeLocation,
+		UserId:          ldutils.Ptr("user-" + locationId),
+		InstallAuthCode: authCodePtr(authCode),
+	}
+}
+
+func countCompanies(t *testing.T, repo ldcore.TestRepo) int64 {
+	t.Helper()
+	var count int64
+	require.NoError(t, repo.Db().Model(&ldspec.DbGHLCompany{}).Count(&count).Error)
+	return count
+}
+
+func countLocations(t *testing.T, repo ldcore.TestRepo) int64 {
+	t.Helper()
+	var count int64
+	require.NoError(t, repo.Db().Model(&ldspec.DbGHLLocation{}).Count(&count).Error)
+	return count
+}
+
+func testFindCompanies(t *testing.T, d ldconn.TestDriver) {
+	t.Run("no companies", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
 		companies, err := repo.FindCompanies()
 		require.NoError(t, err)
 		assert.NotNil(t, companies)
 		assert.Empty(t, companies)
 	})
 
-	t.Run("distinct companies without nil ids", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		now := time.Now()
-		SaveInstalls(t, repo,
-			CompanyGrant("company-1", "code-1", now),
-			CompanyGrant("company-1", "code-2", now),
-			LocationAccess("company-1", "loc-1", "code-3", now),
-			CompanyGrant("company-2", "code-4", now),
-			&spec.DbGHLAppInstallation{AuthorizationCode: "code-no-company"},
-		)
+	t.Run("all the companies", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SaveCompany(company("company-1", "code-1")))
+		require.NoError(t, repo.SaveCompany(company("company-2", "code-2")))
 
 		companies, err := repo.FindCompanies()
 		require.NoError(t, err)
-		assert.ElementsMatch(t, []string{"company-1", "company-2"}, companies)
+		ids := make([]string, 0, len(companies))
+		for _, c := range companies {
+			ids = append(ids, c.CompanyId)
+		}
+		assert.ElementsMatch(t, []string{"company-1", "company-2"}, ids)
+	})
+
+	t.Run("ignores deleted companies", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		deleted := company("company-1", "code-1")
+		require.NoError(t, repo.SaveCompany(deleted))
+		require.NoError(t, repo.SaveCompany(company("company-2", "code-2")))
+		require.NoError(t, repo.Db().Delete(deleted).Error)
+
+		companies, err := repo.FindCompanies()
+		require.NoError(t, err)
+		require.Len(t, companies, 1)
+		assert.Equal(t, "company-2", companies[0].CompanyId)
 	})
 }
 
-func testGetLatestInstall(t *testing.T, d TestDriver) {
-	repo := newTestRepo(t, d)
-	now := time.Now()
-	SaveInstalls(t, repo,
-		CompanyGrant("company-1", "old", now.Add(-2*time.Hour)),
-		CompanyGrant("company-1", "latest", now.Add(-1*time.Hour)),
-		LocationAccess("company-1", "loc-1", "location-newer", now),
-		CompanyGrant("company-2", "other-company", now),
-	)
+func testFindCompany(t *testing.T, d ldconn.TestDriver) {
+	repo := ldcore.NewTestRepo(t, d)
+	require.NoError(t, repo.SaveCompany(company("company-1", "code-1")))
+	require.NoError(t, repo.SaveCompany(company("company-2", "code-2")))
 
-	t.Run("newest company grant", func(t *testing.T) {
-		install, err := repo.GetLatestInstall("company-1")
+	t.Run("the company with the id", func(t *testing.T) {
+		found, err := repo.FindCompany("company-1")
 		require.NoError(t, err)
-		assert.Equal(t, "latest", install.AuthorizationCode)
-		assert.Nil(t, install.LocationId)
-	})
-
-	t.Run("ignores location tokens", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		SaveInstalls(t, repo, LocationAccess("company-1", "loc-1", "code", now))
-		install, err := repo.GetLatestInstall("company-1")
-		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, install)
+		assert.Equal(t, "company-1", found.CompanyId)
+		assert.Equal(t, "Company company-1", found.Name)
+		assert.Equal(t, ldutils.Ptr("code-1"), found.InstallAuthCode)
+		assert.Equal(t, ldutils.Ptr("access-code-1"), found.AccessToken)
+		assert.Equal(t, ldutils.Ptr("refresh-code-1"), found.RefreshToken)
+		assert.Equal(t, ldutils.Ptr("user-company-1"), found.UserId)
 	})
 
 	t.Run("unknown company", func(t *testing.T) {
-		install, err := repo.GetLatestInstall("company-unknown")
+		found, err := repo.FindCompany("company-unknown")
 		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, install)
+		assert.Nil(t, found)
 	})
 }
 
-func testGetLatestAccess(t *testing.T, d TestDriver) {
-	repo := newTestRepo(t, d)
-	now := time.Now()
-	SaveInstalls(t, repo,
-		LocationAccess("company-1", "loc-1", "old", now.Add(-2*time.Hour)),
-		LocationAccess("company-1", "loc-1", "latest", now.Add(-1*time.Hour)),
-		LocationAccess("company-1", "loc-2", "other-location", now),
-		CompanyGrant("company-1", "company", now),
-	)
-
-	t.Run("newest location token", func(t *testing.T) {
-		install, err := repo.GetLatestAccess("loc-1")
-		require.NoError(t, err)
-		assert.Equal(t, "latest", install.AuthorizationCode)
-		assert.Equal(t, "loc-1", *install.LocationId)
+func testSaveCompany(t *testing.T, d ldconn.TestDriver) {
+	t.Run("creates a new company", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		c := company("company-1", "code-1")
+		require.NoError(t, repo.SaveCompany(c))
+		assert.NotZero(t, c.ID)
+		assert.EqualValues(t, 1, countCompanies(t, repo))
 	})
 
-	t.Run("other location", func(t *testing.T) {
-		install, err := repo.GetLatestAccess("loc-2")
+	t.Run("a new record updates the company with the same id", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		first := company("company-1", "code-1")
+		require.NoError(t, repo.SaveCompany(first))
+
+		second := company("company-1", "code-2")
+		second.Name = "Renamed"
+		second.UserId = ldutils.Ptr("user-2")
+		second.ExpiresIn = ldutils.Ptr(int64(3600))
+		require.NoError(t, repo.SaveCompany(second))
+		assert.Equal(t, first.ID, second.ID)
+
+		assert.EqualValues(t, 1, countCompanies(t, repo))
+		found, err := repo.FindCompany("company-1")
 		require.NoError(t, err)
-		assert.Equal(t, "other-location", install.AuthorizationCode)
+		assert.Equal(t, first.ID, found.ID)
+		assert.Equal(t, "Renamed", found.Name)
+		assert.Equal(t, ldutils.Ptr("code-2"), found.InstallAuthCode)
+		assert.Equal(t, ldutils.Ptr("access-code-2"), found.AccessToken)
+		assert.Equal(t, ldutils.Ptr("refresh-code-2"), found.RefreshToken)
+		assert.Equal(t, ldutils.Ptr("user-2"), found.UserId)
+		assert.Equal(t, ldutils.Ptr(int64(3600)), found.ExpiresIn)
 	})
 
-	t.Run("unknown location", func(t *testing.T) {
-		install, err := repo.GetLatestAccess("loc-unknown")
+	t.Run("a new record restores the deleted company with the same id", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		first := company("company-1", "code-1")
+		require.NoError(t, repo.SaveCompany(first))
+		require.NoError(t, repo.Db().Delete(first).Error)
+
+		require.NoError(t, repo.SaveCompany(company("company-1", "code-2")))
+
+		found, err := repo.FindCompany("company-1")
+		require.NoError(t, err)
+		assert.Equal(t, first.ID, found.ID)
+		assert.Equal(t, ldutils.Ptr("code-2"), found.InstallAuthCode)
+	})
+
+	t.Run("a record with an id is saved as is", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		c := company("company-1", "code-1")
+		require.NoError(t, repo.SaveCompany(c))
+
+		c.AccessToken = ldutils.Ptr("refreshed")
+		c.CompanyId = "company-2"
+		require.NoError(t, repo.SaveCompany(c))
+
+		assert.EqualValues(t, 1, countCompanies(t, repo))
+		found, err := repo.FindCompany("company-2")
+		require.NoError(t, err)
+		assert.Equal(t, c.ID, found.ID)
+		assert.Equal(t, ldutils.Ptr("refreshed"), found.AccessToken)
+		_, err = repo.FindCompany("company-1")
 		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, install)
+	})
+
+	t.Run("different companies are kept apart", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SaveCompany(company("company-1", "code-1")))
+		require.NoError(t, repo.SaveCompany(company("company-2", "code-2")))
+		assert.EqualValues(t, 2, countCompanies(t, repo))
 	})
 }
 
-func testFindByCompanyAndAuthCode(t *testing.T, d TestDriver) {
-	repo := newTestRepo(t, d)
-	now := time.Now()
-	older := CompanyGrant("company-1", "code-1", now.Add(-2*time.Hour))
-	newer := CompanyGrant("company-1", "code-1", now.Add(-1*time.Hour))
-	SaveInstalls(t, repo,
-		older,
-		newer,
-		CompanyGrant("company-1", "code-2", now),
-		CompanyGrant("company-2", "code-3", now),
-		LocationAccess("company-1", "loc-1", "code-loc", now),
-	)
-
-	t.Run("newest grant with the code", func(t *testing.T) {
-		install, err := repo.FindByCompanyAndAuthCode("company-1", "code-1")
+func testSaveCompanyAppInstall(t *testing.T, d ldconn.TestDriver) {
+	t.Run("saves the company with the authorization code", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		c := company("company-1", "")
+		saved, err := repo.SaveCompanyAppInstall("code-1", c)
 		require.NoError(t, err)
-		assert.Equal(t, newer.ID, install.ID)
+		require.NotNil(t, saved)
+		assert.NotZero(t, saved.ID)
+		assert.Equal(t, ldutils.Ptr("code-1"), saved.InstallAuthCode)
+
+		found, err := repo.FindCompany("company-1")
+		require.NoError(t, err)
+		assert.Equal(t, saved.ID, found.ID)
+		assert.Equal(t, ldutils.Ptr("code-1"), found.InstallAuthCode)
 	})
 
-	t.Run("code of another company", func(t *testing.T) {
-		install, err := repo.FindByCompanyAndAuthCode("company-1", "code-3")
-		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, install)
+	t.Run("an authorization code already used returns the saved company unchanged", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		first, err := repo.SaveCompanyAppInstall("code-1", company("company-1", ""))
+		require.NoError(t, err)
+
+		again := company("company-1", "")
+		again.AccessToken = ldutils.Ptr("other-access")
+		saved, err := repo.SaveCompanyAppInstall("code-1", again)
+		require.NoError(t, err)
+		require.NotNil(t, saved)
+		assert.Equal(t, first.ID, saved.ID)
+		assert.Equal(t, first.AccessToken, saved.AccessToken)
+
+		assert.EqualValues(t, 1, countCompanies(t, repo))
+		found, err := repo.FindCompany("company-1")
+		require.NoError(t, err)
+		assert.Equal(t, first.AccessToken, found.AccessToken)
 	})
 
-	t.Run("code of a location token", func(t *testing.T) {
-		install, err := repo.FindByCompanyAndAuthCode("company-1", "code-loc")
-		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, install)
-	})
+	t.Run("a new authorization code updates the company with the same id", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		first, err := repo.SaveCompanyAppInstall("code-1", company("company-1", "code-1"))
+		require.NoError(t, err)
 
-	t.Run("unknown code", func(t *testing.T) {
-		install, err := repo.FindByCompanyAndAuthCode("company-1", "code-unknown")
-		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, install)
+		saved, err := repo.SaveCompanyAppInstall("code-2", company("company-1", "code-2"))
+		require.NoError(t, err)
+		assert.Equal(t, first.ID, saved.ID)
+
+		assert.EqualValues(t, 1, countCompanies(t, repo))
+		found, err := repo.FindCompany("company-1")
+		require.NoError(t, err)
+		assert.Equal(t, ldutils.Ptr("code-2"), found.InstallAuthCode)
+		assert.Equal(t, ldutils.Ptr("access-code-2"), found.AccessToken)
 	})
 }
 
-func testFindByAuthCode(t *testing.T, d TestDriver) {
-	repo := newTestRepo(t, d)
-	now := time.Now()
-	older := CompanyGrant("company-1", "code-1", now.Add(-2*time.Hour))
-	newer := CompanyGrant("company-2", "code-1", now.Add(-1*time.Hour))
-	SaveInstalls(t, repo,
-		older,
-		newer,
-		CompanyGrant("company-1", "code-2", now),
-		LocationAccess("company-1", "loc-1", "code-loc", now),
-	)
+func testFindLocations(t *testing.T, d ldconn.TestDriver) {
+	t.Run("the locations of the company", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SaveLocation(location("company-1", "loc-1", "code-1")))
+		require.NoError(t, repo.SaveLocation(location("company-1", "loc-2", "code-2")))
+		require.NoError(t, repo.SaveLocation(location("company-2", "loc-3", "code-3")))
 
-	t.Run("newest grant with the code of any company", func(t *testing.T) {
-		install, err := repo.FindByAuthCode("code-1")
-		require.NoError(t, err)
-		assert.Equal(t, newer.ID, install.ID)
-		assert.Equal(t, "company-2", *install.CompanyId)
-	})
-
-	t.Run("code of a location token", func(t *testing.T) {
-		install, err := repo.FindByAuthCode("code-loc")
-		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, install)
-	})
-
-	t.Run("unknown code", func(t *testing.T) {
-		install, err := repo.FindByAuthCode("code-unknown")
-		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, install)
-	})
-}
-
-func testSaveAppInstall(t *testing.T, d TestDriver) {
-	t.Run("creates with all the fields", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		install := &spec.DbGHLAppInstallation{
-			AuthorizationCode:  "authorization_code",
-			AccessToken:        utils.PtrString("access_token"),
-			ApprovedLocations:  utils.PtrString("loc-1,loc-2"),
-			CompanyId:          utils.PtrString("company1"),
-			ExpiresIn:          utils.PtrFloat32(3600),
-			IsBulkInstallation: utils.PtrBool(true),
-			LocationId:         utils.PtrString("location1"),
-			PlanId:             utils.PtrString("plan1"),
-			RefreshToken:       utils.PtrString("refresh_token"),
-			Scope:              utils.PtrString("contacts.readonly"),
-			TokenType:          utils.PtrString("Bearer"),
-			UserId:             utils.PtrString("user1"),
-			UserType:           utils.PtrString("Location"),
-		}
-		require.NoError(t, repo.SaveAppInstall(install))
-		assert.NotZero(t, install.ID)
-
-		found, err := repo.GetLatestAccess("location1")
-		require.NoError(t, err)
-		assert.Equal(t, install.ID, found.ID)
-		assert.Equal(t, "authorization_code", found.AuthorizationCode)
-		assert.Equal(t, "access_token", *found.AccessToken)
-		assert.Equal(t, "loc-1,loc-2", *found.ApprovedLocations)
-		assert.Equal(t, "company1", *found.CompanyId)
-		assert.InDelta(t, 3600, *found.ExpiresIn, 0.001)
-		assert.True(t, *found.IsBulkInstallation)
-		assert.Equal(t, "plan1", *found.PlanId)
-		assert.Equal(t, "refresh_token", *found.RefreshToken)
-		assert.Equal(t, "contacts.readonly", *found.Scope)
-		assert.Equal(t, "Bearer", *found.TokenType)
-		assert.Equal(t, "user1", *found.UserId)
-		assert.Equal(t, "Location", *found.UserType)
-	})
-
-	t.Run("updates an existing installation", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		install := CompanyGrant("company-1", "code-1", time.Now())
-		require.NoError(t, repo.SaveAppInstall(install))
-
-		install.AccessToken = utils.PtrString("refreshed")
-		install.RefreshToken = utils.PtrString("new-refresh")
-		require.NoError(t, repo.SaveAppInstall(install))
-
-		all, err := repo.FindAllAppInstalls()
-		require.NoError(t, err)
-		require.Len(t, all, 1)
-		assert.Equal(t, install.ID, all[0].ID)
-		assert.Equal(t, "refreshed", *all[0].AccessToken)
-		assert.Equal(t, "new-refresh", *all[0].RefreshToken)
-	})
-}
-
-func testFindAllAppInstalls(t *testing.T, d TestDriver) {
-	t.Run("no installations", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		all, err := repo.FindAllAppInstalls()
-		require.NoError(t, err)
-		assert.Empty(t, all)
-	})
-
-	t.Run("company grants and location tokens", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		now := time.Now()
-		SaveInstalls(t, repo,
-			CompanyGrant("company-1", "code-1", now),
-			LocationAccess("company-1", "loc-1", "code-2", now),
-			CompanyGrant("company-2", "code-3", now),
-		)
-
-		all, err := repo.FindAllAppInstalls()
-		require.NoError(t, err)
-		codes := make([]string, 0, len(all))
-		for _, install := range all {
-			codes = append(codes, install.AuthorizationCode)
-		}
-		assert.ElementsMatch(t, []string{"code-1", "code-2", "code-3"}, codes)
-	})
-}
-
-func testCleanAppInstalls(t *testing.T, d TestDriver) {
-	t.Run("permanently deletes the installations before the date", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		now := time.Now()
-		SaveInstalls(t, repo,
-			CompanyGrant("company-1", "old-company", now.Add(-48*time.Hour)),
-			LocationAccess("company-1", "loc-1", "old-location", now.Add(-25*time.Hour)),
-			CompanyGrant("company-1", "recent-company", now.Add(-1*time.Hour)),
-			LocationAccess("company-1", "loc-1", "recent-location", now),
-		)
-
-		require.NoError(t, repo.CleanAppInstalls(now.Add(-24*time.Hour)))
-
-		all, err := repo.FindAllAppInstalls()
-		require.NoError(t, err)
-		codes := make([]string, 0, len(all))
-		for _, install := range all {
-			codes = append(codes, install.AuthorizationCode)
-		}
-		assert.ElementsMatch(t, []string{"recent-company", "recent-location"}, codes)
-
-		var count int64
-		require.NoError(t, repo.coreDb.Unscoped().Model(&spec.DbGHLAppInstallation{}).Count(&count).Error)
-		assert.EqualValues(t, 2, count, "the old installations must not be soft deleted")
-	})
-
-	t.Run("nothing to clean", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		now := time.Now()
-		SaveInstalls(t, repo, CompanyGrant("company-1", "code-1", now))
-
-		require.NoError(t, repo.CleanAppInstalls(now.Add(-time.Hour)))
-
-		all, err := repo.FindAllAppInstalls()
-		require.NoError(t, err)
-		assert.Len(t, all, 1)
-	})
-
-	t.Run("empty table", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		assert.NoError(t, repo.CleanAppInstalls(time.Now()))
-	})
-}
-
-func testFindInstalledLocations(t *testing.T, d TestDriver) {
-	t.Run("locations of the company", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		SaveInstalls(t, repo, CompanyGrant("company-1", "code-1", time.Now()))
-		require.NoError(t, repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{CompanyId: "company-1", LocationId: "loc-1", Name: "One"}))
-		require.NoError(t, repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{CompanyId: "company-1", LocationId: "loc-2", Name: "Two"}))
-		require.NoError(t, repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{CompanyId: "company-2", LocationId: "loc-3", Name: "Three"}))
-
-		locations, err := repo.FindInstalledLocations("company-1")
+		locations, err := repo.FindLocations("company-1")
 		require.NoError(t, err)
 		ids := make([]string, 0, len(locations))
-		for _, location := range locations {
-			ids = append(ids, location.LocationId)
+		for _, l := range locations {
+			ids = append(ids, l.LocationId)
 		}
 		assert.ElementsMatch(t, []string{"loc-1", "loc-2"}, ids)
 	})
 
-	t.Run("company with a grant and no locations", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		SaveInstalls(t, repo, CompanyGrant("company-1", "code-1", time.Now()))
-
-		locations, err := repo.FindInstalledLocations("company-1")
+	t.Run("unknown company", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SaveLocation(location("company-1", "loc-1", "code-1")))
+		locations, err := repo.FindLocations("company-unknown")
 		require.NoError(t, err)
+		assert.NotNil(t, locations)
 		assert.Empty(t, locations)
 	})
 
-	t.Run("company without a grant", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		SaveInstalls(t, repo, LocationAccess("company-1", "loc-1", "code-1", time.Now()))
-		require.NoError(t, repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{CompanyId: "company-1", LocationId: "loc-1"}))
+	t.Run("ignores deleted locations", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		deleted := location("company-1", "loc-1", "code-1")
+		require.NoError(t, repo.SaveLocation(deleted))
+		require.NoError(t, repo.SaveLocation(location("company-1", "loc-2", "code-2")))
+		require.NoError(t, repo.Db().Delete(deleted).Error)
 
-		locations, err := repo.FindInstalledLocations("company-1")
-		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, locations)
+		locations, err := repo.FindLocations("company-1")
+		require.NoError(t, err)
+		require.Len(t, locations, 1)
+		assert.Equal(t, "loc-2", locations[0].LocationId)
 	})
 }
 
-func testFindInstalledLocation(t *testing.T, d TestDriver) {
-	repo := newTestRepo(t, d)
-	installedAt := time.Now().Add(-time.Hour).Truncate(time.Second)
-	require.NoError(t, repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{
-		CompanyId:   "company-1",
-		LocationId:  "loc-1",
-		Address:     "1 Main St",
-		InstalledAt: &installedAt,
-		IsInstalled: utils.PtrBool(true),
-		Name:        "One",
-		VersionId:   utils.PtrString("v1"),
-	}))
-	require.NoError(t, repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{CompanyId: "company-1", LocationId: "loc-2", Name: "Two"}))
+func testFindLocation(t *testing.T, d ldconn.TestDriver) {
+	repo := ldcore.NewTestRepo(t, d)
+	require.NoError(t, repo.SaveLocation(location("company-1", "loc-1", "code-1")))
+	require.NoError(t, repo.SaveLocation(location("company-1", "loc-2", "code-2")))
 
-	t.Run("finds by location id", func(t *testing.T) {
-		location, err := repo.FindInstalledLocation("loc-1")
+	t.Run("the location with the id", func(t *testing.T) {
+		found, err := repo.FindLocation("loc-1")
 		require.NoError(t, err)
-		assert.Equal(t, "company-1", location.CompanyId)
-		assert.Equal(t, "1 Main St", location.Address)
-		require.NotNil(t, location.InstalledAt)
-		assert.True(t, installedAt.Equal(*location.InstalledAt))
-		assert.True(t, *location.IsInstalled)
-		assert.Equal(t, "One", location.Name)
-		assert.Equal(t, "v1", *location.VersionId)
+		assert.Equal(t, "company-1", found.CompanyId)
+		assert.Equal(t, "loc-1", found.LocationId)
+		assert.Equal(t, "Location loc-1", found.Name)
+		assert.Equal(t, ldutils.Ptr("access-code-1"), found.AccessToken)
+		assert.Equal(t, ldutils.Ptr("refresh-code-1"), found.RefreshToken)
+		assert.EqualValues(t, ldspec.DbGHLInstallTypeLocation, found.InstallType)
+		assert.Equal(t, ldutils.Ptr("user-loc-1"), found.UserId)
+		assert.Equal(t, ldutils.Ptr("code-1"), found.InstallAuthCode)
 	})
 
 	t.Run("unknown location", func(t *testing.T) {
-		location, err := repo.FindInstalledLocation("loc-unknown")
+		found, err := repo.FindLocation("loc-unknown")
 		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
-		assert.Nil(t, location)
+		assert.Nil(t, found)
 	})
 }
 
-func testSaveInstalledLocation(t *testing.T, d TestDriver) {
-	countLocations := func(t *testing.T, repo *coreRepoImpl) int64 {
-		t.Helper()
-		var count int64
-		require.NoError(t, repo.coreDb.Model(&spec.DbGHLInstalledLocation{}).Count(&count).Error)
-		return count
-	}
-
+func testSaveLocation(t *testing.T, d ldconn.TestDriver) {
 	t.Run("creates a new location", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		location := &spec.DbGHLInstalledLocation{CompanyId: "company-1", LocationId: "loc-1", Name: "One"}
-		require.NoError(t, repo.SaveInstalledLocation(location))
-		assert.NotZero(t, location.ID)
+		repo := ldcore.NewTestRepo(t, d)
+		l := location("company-1", "loc-1", "code-1")
+		require.NoError(t, repo.SaveLocation(l))
+		assert.NotZero(t, l.ID)
 		assert.EqualValues(t, 1, countLocations(t, repo))
 	})
 
 	t.Run("a new record updates the location with the same id", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		first := &spec.DbGHLInstalledLocation{
-			CompanyId:   "company-1",
-			LocationId:  "loc-1",
-			Name:        "Old",
-			Address:     "Old address",
-			IsInstalled: utils.PtrBool(true),
-			VersionId:   utils.PtrString("v1"),
-		}
-		require.NoError(t, repo.SaveInstalledLocation(first))
+		repo := ldcore.NewTestRepo(t, d)
+		first := location("company-1", "loc-1", "code-1")
+		require.NoError(t, repo.SaveLocation(first))
 
-		installedAt := time.Now().Truncate(time.Second)
-		require.NoError(t, repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{
-			CompanyId:   "company-2",
-			LocationId:  "loc-1",
-			Name:        "New",
-			Address:     "New address",
-			InstalledAt: &installedAt,
-			IsInstalled: utils.PtrBool(false),
-			VersionId:   utils.PtrString("v2"),
-		}))
+		second := location("company-2", "loc-1", "code-2")
+		second.Name = "Renamed"
+		second.InstallType = ldspec.DbGHLInstallTypeCompany
+		second.UserId = ldutils.Ptr("user-2")
+		second.ExpiresIn = ldutils.Ptr(int64(3600))
+		require.NoError(t, repo.SaveLocation(second))
+		assert.Equal(t, first.ID, second.ID)
 
 		assert.EqualValues(t, 1, countLocations(t, repo))
-		found, err := repo.FindInstalledLocation("loc-1")
+		found, err := repo.FindLocation("loc-1")
 		require.NoError(t, err)
 		assert.Equal(t, first.ID, found.ID)
 		assert.Equal(t, "company-2", found.CompanyId)
-		assert.Equal(t, "New", found.Name)
-		assert.Equal(t, "New address", found.Address)
-		require.NotNil(t, found.InstalledAt)
-		assert.True(t, installedAt.Equal(*found.InstalledAt))
-		assert.False(t, *found.IsInstalled)
-		assert.Equal(t, "v2", *found.VersionId)
+		assert.Equal(t, "Renamed", found.Name)
+		assert.Equal(t, ldutils.Ptr("access-code-2"), found.AccessToken)
+		assert.Equal(t, ldutils.Ptr("refresh-code-2"), found.RefreshToken)
+		assert.EqualValues(t, ldspec.DbGHLInstallTypeCompany, found.InstallType)
+		assert.Equal(t, ldutils.Ptr("user-2"), found.UserId)
+		assert.Equal(t, ldutils.Ptr("code-2"), found.InstallAuthCode)
+		assert.Equal(t, ldutils.Ptr(int64(3600)), found.ExpiresIn)
+	})
+
+	t.Run("a new record restores the deleted location with the same id", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		first := location("company-1", "loc-1", "code-1")
+		require.NoError(t, repo.SaveLocation(first))
+		require.NoError(t, repo.Db().Delete(first).Error)
+
+		require.NoError(t, repo.SaveLocation(location("company-1", "loc-1", "code-2")))
+
+		found, err := repo.FindLocation("loc-1")
+		require.NoError(t, err)
+		assert.Equal(t, first.ID, found.ID)
+		assert.Equal(t, ldutils.Ptr("code-2"), found.InstallAuthCode)
 	})
 
 	t.Run("a record with an id is saved as is", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		location := &spec.DbGHLInstalledLocation{CompanyId: "company-1", LocationId: "loc-1", Name: "Old"}
-		require.NoError(t, repo.SaveInstalledLocation(location))
+		repo := ldcore.NewTestRepo(t, d)
+		l := location("company-1", "loc-1", "code-1")
+		require.NoError(t, repo.SaveLocation(l))
 
-		location.Name = "Renamed"
-		location.LocationId = "loc-2"
-		require.NoError(t, repo.SaveInstalledLocation(location))
+		l.Name = "Renamed"
+		l.LocationId = "loc-2"
+		require.NoError(t, repo.SaveLocation(l))
 
 		assert.EqualValues(t, 1, countLocations(t, repo))
-		found, err := repo.FindInstalledLocation("loc-2")
+		found, err := repo.FindLocation("loc-2")
 		require.NoError(t, err)
-		assert.Equal(t, location.ID, found.ID)
+		assert.Equal(t, l.ID, found.ID)
 		assert.Equal(t, "Renamed", found.Name)
-		_, err = repo.FindInstalledLocation("loc-1")
+		_, err = repo.FindLocation("loc-1")
 		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	})
 
 	t.Run("different locations are kept apart", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		require.NoError(t, repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{CompanyId: "company-1", LocationId: "loc-1"}))
-		require.NoError(t, repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{CompanyId: "company-1", LocationId: "loc-2"}))
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SaveLocation(location("company-1", "loc-1", "code-1")))
+		require.NoError(t, repo.SaveLocation(location("company-1", "loc-2", "code-2")))
+		assert.EqualValues(t, 2, countLocations(t, repo))
+	})
+
+	t.Run("many locations installed by the company have no authorization code", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		for _, id := range []string{"loc-1", "loc-2"} {
+			l := location("company-1", id, "")
+			l.InstallType = ldspec.DbGHLInstallTypeCompany
+			require.NoError(t, repo.SaveLocation(l))
+		}
 		assert.EqualValues(t, 2, countLocations(t, repo))
 	})
 }
 
-func testFindServiceAccount(t *testing.T, d TestDriver) {
-	repo := newTestRepo(t, d)
-	require.NoError(t, repo.SaveServiceAccount(&spec.DbServiceAccount{ClientId: "client-1", ClientSecret: utils.PtrString("secret-1")}))
-	require.NoError(t, repo.SaveServiceAccount(&spec.DbServiceAccount{ClientId: "client-2", ClientSecret: utils.PtrString("secret-2")}))
+func testSaveLocationAppInstall(t *testing.T, d ldconn.TestDriver) {
+	t.Run("saves the location with the authorization code", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		saved, err := repo.SaveLocationAppInstall("code-1", location("company-1", "loc-1", ""))
+		require.NoError(t, err)
+		require.NotNil(t, saved)
+		assert.NotZero(t, saved.ID)
+		assert.Equal(t, ldutils.Ptr("code-1"), saved.InstallAuthCode)
+
+		found, err := repo.FindLocation("loc-1")
+		require.NoError(t, err)
+		assert.Equal(t, saved.ID, found.ID)
+		assert.Equal(t, ldutils.Ptr("code-1"), found.InstallAuthCode)
+	})
+
+	t.Run("an authorization code already used returns the saved location unchanged", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		first, err := repo.SaveLocationAppInstall("code-1", location("company-1", "loc-1", ""))
+		require.NoError(t, err)
+
+		again := location("company-1", "loc-1", "")
+		again.AccessToken = ldutils.Ptr("other-access")
+		saved, err := repo.SaveLocationAppInstall("code-1", again)
+		require.NoError(t, err)
+		require.NotNil(t, saved)
+		assert.Equal(t, first.ID, saved.ID)
+		assert.Equal(t, first.AccessToken, saved.AccessToken)
+
+		assert.EqualValues(t, 1, countLocations(t, repo))
+		found, err := repo.FindLocation("loc-1")
+		require.NoError(t, err)
+		assert.Equal(t, first.AccessToken, found.AccessToken)
+	})
+
+	t.Run("a new authorization code updates the location with the same id", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		first, err := repo.SaveLocationAppInstall("code-1", location("company-1", "loc-1", "code-1"))
+		require.NoError(t, err)
+
+		saved, err := repo.SaveLocationAppInstall("code-2", location("company-1", "loc-1", "code-2"))
+		require.NoError(t, err)
+		assert.Equal(t, first.ID, saved.ID)
+
+		assert.EqualValues(t, 1, countLocations(t, repo))
+		found, err := repo.FindLocation("loc-1")
+		require.NoError(t, err)
+		assert.Equal(t, ldutils.Ptr("code-2"), found.InstallAuthCode)
+		assert.Equal(t, ldutils.Ptr("access-code-2"), found.AccessToken)
+	})
+}
+
+func testFindServiceAccount(t *testing.T, d ldconn.TestDriver) {
+	repo := ldcore.NewTestRepo(t, d)
+	require.NoError(t, repo.SaveServiceAccount(&ldspec.DbServiceAccount{ClientId: "client-1", ClientSecret: ldutils.Ptr("secret-1")}))
+	require.NoError(t, repo.SaveServiceAccount(&ldspec.DbServiceAccount{ClientId: "client-2", ClientSecret: ldutils.Ptr("secret-2")}))
 
 	t.Run("finds by client id", func(t *testing.T) {
-		account, err := repo.FindServiceAccount(utils.PtrString("client-2"))
+		account, err := repo.FindServiceAccount(ldutils.Ptr("client-2"))
 		require.NoError(t, err)
 		assert.Equal(t, "client-2", account.ClientId)
 		assert.Equal(t, "secret-2", *account.ClientSecret)
-		assert.Equal(t, spec.LDActive, account.Status)
+		assert.Equal(t, ldspec.LDActive, account.Status)
 	})
 
 	t.Run("unknown client id", func(t *testing.T) {
-		account, err := repo.FindServiceAccount(utils.PtrString("client-unknown"))
+		account, err := repo.FindServiceAccount(ldutils.Ptr("client-unknown"))
 		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 		assert.Nil(t, account)
 	})
@@ -607,42 +697,42 @@ func testFindServiceAccount(t *testing.T, d TestDriver) {
 	})
 }
 
-func testSaveServiceAccount(t *testing.T, d TestDriver) {
+func testSaveServiceAccount(t *testing.T, d ldconn.TestDriver) {
 	t.Run("updates an existing account", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		account := &spec.DbServiceAccount{ClientId: "client-1", ClientSecret: utils.PtrString("old")}
+		repo := ldcore.NewTestRepo(t, d)
+		account := &ldspec.DbServiceAccount{ClientId: "client-1", ClientSecret: ldutils.Ptr("old")}
 		require.NoError(t, repo.SaveServiceAccount(account))
 		assert.NotZero(t, account.ID)
 
-		account.ClientSecret = utils.PtrString("new")
-		account.Status = spec.LDInactive
+		account.ClientSecret = ldutils.Ptr("new")
+		account.Status = ldspec.LDInactive
 		require.NoError(t, repo.SaveServiceAccount(account))
 
-		found, err := repo.FindServiceAccount(utils.PtrString("client-1"))
+		found, err := repo.FindServiceAccount(ldutils.Ptr("client-1"))
 		require.NoError(t, err)
 		assert.Equal(t, account.ID, found.ID)
 		assert.Equal(t, "new", *found.ClientSecret)
-		assert.Equal(t, spec.LDInactive, found.Status)
+		assert.Equal(t, ldspec.LDInactive, found.Status)
 	})
 
 	t.Run("duplicated client id", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		require.NoError(t, repo.SaveServiceAccount(&spec.DbServiceAccount{ClientId: "client-1"}))
-		assert.Error(t, repo.SaveServiceAccount(&spec.DbServiceAccount{ClientId: "client-1"}))
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SaveServiceAccount(&ldspec.DbServiceAccount{ClientId: "client-1"}))
+		assert.Error(t, repo.SaveServiceAccount(&ldspec.DbServiceAccount{ClientId: "client-1"}))
 	})
 }
 
-func testFindNode(t *testing.T, d TestDriver) {
-	repo := newTestRepo(t, d)
+func testFindNode(t *testing.T, d ldconn.TestDriver) {
+	repo := ldcore.NewTestRepo(t, d)
 	heartbeat := time.Now().Truncate(time.Second)
-	require.NoError(t, repo.SaveNode(&spec.DbServerNode{NodeId: "node-1", Status: spec.Live, LastHeartbeat: &heartbeat}))
-	require.NoError(t, repo.SaveNode(&spec.DbServerNode{NodeId: "node-2", Status: spec.Starting}))
+	require.NoError(t, repo.SaveNode(&ldspec.DbServerNode{NodeId: "node-1", Status: ldspec.Live, LastHeartbeat: &heartbeat}))
+	require.NoError(t, repo.SaveNode(&ldspec.DbServerNode{NodeId: "node-2", Status: ldspec.Starting}))
 
 	t.Run("finds by node id", func(t *testing.T) {
 		node, err := repo.FindNode("node-1")
 		require.NoError(t, err)
 		assert.Equal(t, "node-1", node.NodeId)
-		assert.Equal(t, spec.Live, node.Status)
+		assert.Equal(t, ldspec.Live, node.Status)
 		require.NotNil(t, node.LastHeartbeat)
 		assert.True(t, heartbeat.Equal(*node.LastHeartbeat))
 	})
@@ -654,38 +744,38 @@ func testFindNode(t *testing.T, d TestDriver) {
 	})
 }
 
-func testFindAllNodes(t *testing.T, d TestDriver) {
+func testFindAllNodes(t *testing.T, d ldconn.TestDriver) {
 	t.Run("no nodes", func(t *testing.T) {
-		repo := newTestRepo(t, d)
+		repo := ldcore.NewTestRepo(t, d)
 		nodes, err := repo.FindAllNodes()
 		require.NoError(t, err)
 		assert.Empty(t, nodes)
 	})
 
 	t.Run("all the nodes", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		require.NoError(t, repo.SaveNode(&spec.DbServerNode{NodeId: "node-1", Status: spec.Live}))
-		require.NoError(t, repo.SaveNode(&spec.DbServerNode{NodeId: "node-2"}))
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SaveNode(&ldspec.DbServerNode{NodeId: "node-1", Status: ldspec.Live}))
+		require.NoError(t, repo.SaveNode(&ldspec.DbServerNode{NodeId: "node-2"}))
 
 		nodes, err := repo.FindAllNodes()
 		require.NoError(t, err)
-		statuses := make(map[string]spec.LDServerNodeStatus, len(nodes))
+		statuses := make(map[string]ldspec.LDServerNodeStatus, len(nodes))
 		for _, node := range nodes {
 			statuses[node.NodeId] = node.Status
 		}
-		assert.Equal(t, map[string]spec.LDServerNodeStatus{"node-1": spec.Live, "node-2": spec.Down}, statuses)
+		assert.Equal(t, map[string]ldspec.LDServerNodeStatus{"node-1": ldspec.Live, "node-2": ldspec.Down}, statuses)
 	})
 }
 
-func testSaveNode(t *testing.T, d TestDriver) {
+func testSaveNode(t *testing.T, d ldconn.TestDriver) {
 	t.Run("a new record updates the node with the same id", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		first := &spec.DbServerNode{NodeId: "node-1", Status: spec.Starting}
+		repo := ldcore.NewTestRepo(t, d)
+		first := &ldspec.DbServerNode{NodeId: "node-1", Status: ldspec.Starting}
 		require.NoError(t, repo.SaveNode(first))
 		assert.NotZero(t, first.ID)
 
 		heartbeat := time.Now().Truncate(time.Second)
-		second := &spec.DbServerNode{NodeId: "node-1", Status: spec.Live, LastHeartbeat: &heartbeat}
+		second := &ldspec.DbServerNode{NodeId: "node-1", Status: ldspec.Live, LastHeartbeat: &heartbeat}
 		require.NoError(t, repo.SaveNode(second))
 		assert.Equal(t, first.ID, second.ID)
 
@@ -693,7 +783,7 @@ func testSaveNode(t *testing.T, d TestDriver) {
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
 		assert.Equal(t, first.ID, nodes[0].ID)
-		assert.Equal(t, spec.Live, nodes[0].Status)
+		assert.Equal(t, ldspec.Live, nodes[0].Status)
 		require.NotNil(t, nodes[0].LastHeartbeat)
 		assert.True(t, heartbeat.Equal(*nodes[0].LastHeartbeat))
 		// postgres keeps the times with microseconds
@@ -701,23 +791,23 @@ func testSaveNode(t *testing.T, d TestDriver) {
 	})
 
 	t.Run("a record with an id is saved as is", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		node := &spec.DbServerNode{NodeId: "node-1", Status: spec.Live}
+		repo := ldcore.NewTestRepo(t, d)
+		node := &ldspec.DbServerNode{NodeId: "node-1", Status: ldspec.Live}
 		require.NoError(t, repo.SaveNode(node))
 
-		node.Status = spec.ShutingDown
+		node.Status = ldspec.ShutingDown
 		require.NoError(t, repo.SaveNode(node))
 
 		nodes, err := repo.FindAllNodes()
 		require.NoError(t, err)
 		require.Len(t, nodes, 1)
-		assert.Equal(t, spec.ShutingDown, nodes[0].Status)
+		assert.Equal(t, ldspec.ShutingDown, nodes[0].Status)
 	})
 
 	t.Run("different nodes are kept apart", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		require.NoError(t, repo.SaveNode(&spec.DbServerNode{NodeId: "node-1"}))
-		require.NoError(t, repo.SaveNode(&spec.DbServerNode{NodeId: "node-2"}))
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SaveNode(&ldspec.DbServerNode{NodeId: "node-1"}))
+		require.NoError(t, repo.SaveNode(&ldspec.DbServerNode{NodeId: "node-2"}))
 
 		nodes, err := repo.FindAllNodes()
 		require.NoError(t, err)
@@ -725,24 +815,205 @@ func testSaveNode(t *testing.T, d TestDriver) {
 	})
 }
 
-func testConcurrentSaves(t *testing.T, d TestDriver) {
-	if d.Cfg.Driver == spec.SqliteDriver && d.Cfg.InMemorySQLite {
-		t.Skip("the shared cache of in-memory sqlite fails concurrent writes with table locked errors")
+func payment(companyId string, locationId string, amount float64, at time.Time) *ldspec.DbPaymentRecord {
+	return &ldspec.DbPaymentRecord{
+		BusinessId: ldutils.Ptr(companyId),
+		LocationId: ldutils.Ptr(locationId),
+		Amount:     &amount,
+		DateTime:   &at,
+	}
+}
+
+func testFindPayments(t *testing.T, d ldconn.TestDriver) {
+	t.Run("returns the payments of the location, the newest first", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		now := time.Now().Truncate(time.Second)
+		require.NoError(t, repo.SavePayment(payment("company-1", "loc-1", 10, now.Add(-2*time.Hour))))
+		require.NoError(t, repo.SavePayment(payment("company-1", "loc-1", 30, now)))
+		require.NoError(t, repo.SavePayment(payment("company-1", "loc-2", 50, now)))
+		require.NoError(t, repo.SavePayment(payment("company-2", "loc-1", 20, now.Add(-time.Hour))))
+
+		payments, err := repo.FindPayments("loc-1")
+		require.NoError(t, err)
+		require.Len(t, payments, 3)
+		assert.Equal(t, 30.0, *payments[0].Amount)
+		assert.Equal(t, 20.0, *payments[1].Amount)
+		assert.Equal(t, 10.0, *payments[2].Amount)
+	})
+
+	t.Run("the payments are not found by the company", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SavePayment(payment("company-1", "loc-1", 10, time.Now())))
+		payments, err := repo.FindPayments("company-1")
+		require.NoError(t, err)
+		assert.Empty(t, payments)
+	})
+
+	t.Run("a location without payments has none", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		payments, err := repo.FindPayments("loc-1")
+		require.NoError(t, err)
+		assert.Empty(t, payments)
+	})
+}
+
+func testSavePayment(t *testing.T, d ldconn.TestDriver) {
+	t.Run("creates and updates a payment", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		now := time.Now().Truncate(time.Second)
+		p := payment("company-1", "loc-1", 10, now)
+		p.StripeId = ldutils.Ptr("pi_1")
+		require.NoError(t, repo.SavePayment(p))
+		assert.NotZero(t, p.ID)
+
+		amount := 15.5
+		p.Amount = &amount
+		require.NoError(t, repo.SavePayment(p))
+
+		payments, err := repo.FindPayments("loc-1")
+		require.NoError(t, err)
+		require.Len(t, payments, 1)
+		assert.Equal(t, p.ID, payments[0].ID)
+		assert.Equal(t, 15.5, *payments[0].Amount)
+		assert.Equal(t, "pi_1", *payments[0].StripeId)
+		require.NotNil(t, payments[0].DateTime)
+		assert.True(t, now.Equal(*payments[0].DateTime))
+	})
+}
+
+func testFindPaidSubscription(t *testing.T, d ldconn.TestDriver) {
+	t.Run("returns the subscription of the location", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SavePaidSubscription(&ldspec.DbPaidSubscription{BusinessId: "company-1", LocationId: "loc-1", Status: ldspec.LDSubscriptionActive}))
+		require.NoError(t, repo.SavePaidSubscription(&ldspec.DbPaidSubscription{BusinessId: "company-1", LocationId: "loc-2", Status: ldspec.LDSubscriptionCanceled}))
+
+		subs, err := repo.FindPaidSubscription("loc-1")
+		require.NoError(t, err)
+		assert.Equal(t, "loc-1", subs.LocationId)
+		assert.Equal(t, ldspec.LDSubscriptionActive, subs.Status)
+	})
+
+	t.Run("a deleted subscription is not found", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		sub := &ldspec.DbPaidSubscription{BusinessId: "company-1", LocationId: "loc-1", Status: ldspec.LDSubscriptionActive}
+		require.NoError(t, repo.SavePaidSubscription(sub))
+		require.NoError(t, repo.Db().Delete(sub).Error)
+
+		subs, err := repo.FindPaidSubscription("loc-1")
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+		assert.Nil(t, subs)
+	})
+
+	t.Run("a location without subscription has none", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		subs, err := repo.FindPaidSubscription("loc-1")
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+		assert.Nil(t, subs)
+	})
+}
+
+func testSavePaidSubscription(t *testing.T, d ldconn.TestDriver) {
+	findAll := func(t *testing.T, repo ldcore.TestRepo) []*ldspec.DbPaidSubscription {
+		t.Helper()
+		var subs []*ldspec.DbPaidSubscription
+		require.NoError(t, repo.Db().Order("id").Find(&subs).Error)
+		return subs
 	}
 
+	t.Run("a new record updates the subscription of the same location", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		first := &ldspec.DbPaidSubscription{
+			BusinessId:    "company-1",
+			LocationId:    "loc-1",
+			Status:        ldspec.LDSubscriptionActive,
+			MonthlyAmount: ldutils.Ptr(99.0),
+			PerUserAmount: ldutils.Ptr(10.0),
+			AmountDue:     ldutils.Ptr(0.0),
+			Accounts:      ldutils.Ptr(uint(2)),
+		}
+		require.NoError(t, repo.SavePaidSubscription(first))
+		assert.NotZero(t, first.ID)
+
+		lastPayment := time.Now().Truncate(time.Second)
+		second := &ldspec.DbPaidSubscription{
+			BusinessId:       "company-2",
+			LocationId:       "loc-1",
+			StripeCustomerId: ldutils.Ptr("sub_1"),
+			Status:           ldspec.LDSubscriptionUnPaid,
+			MonthlyAmount:    ldutils.Ptr(149.0),
+			PerUserAmount:    ldutils.Ptr(12.5),
+			AmountDue:        ldutils.Ptr(74.5),
+			Accounts:         ldutils.Ptr(uint(5)),
+			LastPayment:      &lastPayment,
+		}
+		require.NoError(t, repo.SavePaidSubscription(second))
+		assert.Equal(t, first.ID, second.ID)
+
+		subs := findAll(t, repo)
+		require.Len(t, subs, 1)
+		assert.Equal(t, first.ID, subs[0].ID)
+		assert.Equal(t, "company-2", subs[0].BusinessId)
+		assert.Equal(t, "sub_1", *subs[0].StripeCustomerId)
+		assert.Equal(t, ldspec.LDSubscriptionUnPaid, subs[0].Status)
+		assert.Equal(t, 149.0, *subs[0].MonthlyAmount)
+		assert.Equal(t, 12.5, *subs[0].PerUserAmount)
+		assert.Equal(t, 74.5, *subs[0].AmountDue)
+		assert.EqualValues(t, 5, *subs[0].Accounts)
+		require.NotNil(t, subs[0].LastPayment)
+		assert.True(t, lastPayment.Equal(*subs[0].LastPayment))
+	})
+
+	t.Run("a deleted subscription is restored", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		first := &ldspec.DbPaidSubscription{BusinessId: "company-1", LocationId: "loc-1", Status: ldspec.LDSubscriptionActive}
+		require.NoError(t, repo.SavePaidSubscription(first))
+		require.NoError(t, repo.Db().Delete(first).Error)
+		assert.Empty(t, findAll(t, repo))
+
+		require.NoError(t, repo.SavePaidSubscription(&ldspec.DbPaidSubscription{BusinessId: "company-1", LocationId: "loc-1", Status: ldspec.LDSubscriptionCanceled}))
+		subs := findAll(t, repo)
+		require.Len(t, subs, 1)
+		assert.Equal(t, first.ID, subs[0].ID)
+		assert.Equal(t, ldspec.LDSubscriptionCanceled, subs[0].Status)
+	})
+
+	t.Run("a record with an id is saved as is", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		sub := &ldspec.DbPaidSubscription{BusinessId: "company-1", LocationId: "loc-1", Status: ldspec.LDSubscriptionActive}
+		require.NoError(t, repo.SavePaidSubscription(sub))
+
+		sub.Status = ldspec.LDSubscriptionCanceled
+		require.NoError(t, repo.SavePaidSubscription(sub))
+
+		subs := findAll(t, repo)
+		require.Len(t, subs, 1)
+		assert.Equal(t, ldspec.LDSubscriptionCanceled, subs[0].Status)
+	})
+
+	t.Run("different locations are kept apart", func(t *testing.T) {
+		repo := ldcore.NewTestRepo(t, d)
+		require.NoError(t, repo.SavePaidSubscription(&ldspec.DbPaidSubscription{BusinessId: "company-1", LocationId: "loc-1"}))
+		require.NoError(t, repo.SavePaidSubscription(&ldspec.DbPaidSubscription{BusinessId: "company-1", LocationId: "loc-2"}))
+		assert.Len(t, findAll(t, repo), 2)
+	})
+}
+
+func testConcurrentSaves(t *testing.T, d ldconn.TestDriver) {
+	d.SkipConcurrentWrites(t)
+
 	t.Run("new records with the same id keep one record", func(t *testing.T) {
-		repo := newTestRepo(t, d)
+		repo := ldcore.NewTestRepo(t, d)
 		var wg sync.WaitGroup
 		errs := make(chan error, 20)
 		for i := 0; i < 10; i++ {
 			wg.Add(2)
 			go func() {
 				defer wg.Done()
-				errs <- repo.SaveNode(&spec.DbServerNode{NodeId: "node-1", Status: spec.Live})
+				errs <- repo.SaveNode(&ldspec.DbServerNode{NodeId: "node-1", Status: ldspec.Live})
 			}()
 			go func() {
 				defer wg.Done()
-				errs <- repo.SaveInstalledLocation(&spec.DbGHLInstalledLocation{CompanyId: "company-1", LocationId: "loc-1"})
+				errs <- repo.SaveLocation(location("company-1", "loc-1", "code-1"))
 			}()
 		}
 		wg.Wait()
@@ -752,32 +1023,24 @@ func testConcurrentSaves(t *testing.T, d TestDriver) {
 		}
 
 		var nodes, locations int64
-		require.NoError(t, repo.coreDb.Model(&spec.DbServerNode{}).Count(&nodes).Error)
-		require.NoError(t, repo.coreDb.Model(&spec.DbGHLInstalledLocation{}).Count(&locations).Error)
+		require.NoError(t, repo.Db().Model(&ldspec.DbServerNode{}).Count(&nodes).Error)
+		require.NoError(t, repo.Db().Model(&ldspec.DbGHLLocation{}).Count(&locations).Error)
 		assert.EqualValues(t, 1, nodes)
 		assert.EqualValues(t, 1, locations)
 	})
 
 	t.Run("a new record restores the deleted one with the same id", func(t *testing.T) {
-		repo := newTestRepo(t, d)
-		first := &spec.DbServerNode{NodeId: "node-1", Status: spec.Live}
+		repo := ldcore.NewTestRepo(t, d)
+		first := &ldspec.DbServerNode{NodeId: "node-1", Status: ldspec.Live}
 		require.NoError(t, repo.SaveNode(first))
-		require.NoError(t, repo.coreDb.Delete(first).Error)
+		require.NoError(t, repo.Db().Delete(first).Error)
 
-		second := &spec.DbServerNode{NodeId: "node-1", Status: spec.Starting}
+		second := &ldspec.DbServerNode{NodeId: "node-1", Status: ldspec.Starting}
 		require.NoError(t, repo.SaveNode(second))
 
 		found, err := repo.FindNode("node-1")
 		require.NoError(t, err)
 		assert.Equal(t, first.ID, found.ID)
-		assert.Equal(t, spec.Starting, found.Status)
+		assert.Equal(t, ldspec.Starting, found.Status)
 	})
-}
-
-func TestIsRetryable(t *testing.T) {
-	assert.True(t, isRetryable(&pgconn.PgError{Code: "40001"}))
-	assert.True(t, isRetryable(fmt.Errorf("wrapped: %w", &pgconn.PgError{Code: "40001"})))
-	assert.False(t, isRetryable(&pgconn.PgError{Code: "23505"}))
-	assert.False(t, isRetryable(gorm.ErrRecordNotFound))
-	assert.False(t, isRetryable(nil))
 }

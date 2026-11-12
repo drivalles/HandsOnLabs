@@ -16,19 +16,25 @@ import (
 )
 
 var (
-	Q                      = new(Query)
-	DbGHLAppInstallation   *dbGHLAppInstallation
-	DbGHLInstalledLocation *dbGHLInstalledLocation
-	DbServerNode           *dbServerNode
-	DbServiceAccount       *dbServiceAccount
-	DbSystemAdmin          *dbSystemAdmin
-	DbTenant               *dbTenant
+	Q                  = new(Query)
+	DbGHLCompany       *dbGHLCompany
+	DbGHLLocation      *dbGHLLocation
+	DbPaidSubscription *dbPaidSubscription
+	DbPaymentRecord    *dbPaymentRecord
+	DbSchemaVersion    *dbSchemaVersion
+	DbServerNode       *dbServerNode
+	DbServiceAccount   *dbServiceAccount
+	DbSystemAdmin      *dbSystemAdmin
+	DbTenant           *dbTenant
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	*Q = *Use(db, opts...)
-	DbGHLAppInstallation = &Q.DbGHLAppInstallation
-	DbGHLInstalledLocation = &Q.DbGHLInstalledLocation
+	DbGHLCompany = &Q.DbGHLCompany
+	DbGHLLocation = &Q.DbGHLLocation
+	DbPaidSubscription = &Q.DbPaidSubscription
+	DbPaymentRecord = &Q.DbPaymentRecord
+	DbSchemaVersion = &Q.DbSchemaVersion
 	DbServerNode = &Q.DbServerNode
 	DbServiceAccount = &Q.DbServiceAccount
 	DbSystemAdmin = &Q.DbSystemAdmin
@@ -37,25 +43,31 @@ func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:                     db,
-		DbGHLAppInstallation:   newDbGHLAppInstallation(db, opts...),
-		DbGHLInstalledLocation: newDbGHLInstalledLocation(db, opts...),
-		DbServerNode:           newDbServerNode(db, opts...),
-		DbServiceAccount:       newDbServiceAccount(db, opts...),
-		DbSystemAdmin:          newDbSystemAdmin(db, opts...),
-		DbTenant:               newDbTenant(db, opts...),
+		db:                 db,
+		DbGHLCompany:       newDbGHLCompany(db, opts...),
+		DbGHLLocation:      newDbGHLLocation(db, opts...),
+		DbPaidSubscription: newDbPaidSubscription(db, opts...),
+		DbPaymentRecord:    newDbPaymentRecord(db, opts...),
+		DbSchemaVersion:    newDbSchemaVersion(db, opts...),
+		DbServerNode:       newDbServerNode(db, opts...),
+		DbServiceAccount:   newDbServiceAccount(db, opts...),
+		DbSystemAdmin:      newDbSystemAdmin(db, opts...),
+		DbTenant:           newDbTenant(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	DbGHLAppInstallation   dbGHLAppInstallation
-	DbGHLInstalledLocation dbGHLInstalledLocation
-	DbServerNode           dbServerNode
-	DbServiceAccount       dbServiceAccount
-	DbSystemAdmin          dbSystemAdmin
-	DbTenant               dbTenant
+	DbGHLCompany       dbGHLCompany
+	DbGHLLocation      dbGHLLocation
+	DbPaidSubscription dbPaidSubscription
+	DbPaymentRecord    dbPaymentRecord
+	DbSchemaVersion    dbSchemaVersion
+	DbServerNode       dbServerNode
+	DbServiceAccount   dbServiceAccount
+	DbSystemAdmin      dbSystemAdmin
+	DbTenant           dbTenant
 }
 
 func (q *Query) Available() bool { return q.db != nil }
@@ -64,13 +76,16 @@ func (q *Query) UnderlyingDB() *gorm.DB { return q.db }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:                     db,
-		DbGHLAppInstallation:   q.DbGHLAppInstallation.clone(db),
-		DbGHLInstalledLocation: q.DbGHLInstalledLocation.clone(db),
-		DbServerNode:           q.DbServerNode.clone(db),
-		DbServiceAccount:       q.DbServiceAccount.clone(db),
-		DbSystemAdmin:          q.DbSystemAdmin.clone(db),
-		DbTenant:               q.DbTenant.clone(db),
+		db:                 db,
+		DbGHLCompany:       q.DbGHLCompany.clone(db),
+		DbGHLLocation:      q.DbGHLLocation.clone(db),
+		DbPaidSubscription: q.DbPaidSubscription.clone(db),
+		DbPaymentRecord:    q.DbPaymentRecord.clone(db),
+		DbSchemaVersion:    q.DbSchemaVersion.clone(db),
+		DbServerNode:       q.DbServerNode.clone(db),
+		DbServiceAccount:   q.DbServiceAccount.clone(db),
+		DbSystemAdmin:      q.DbSystemAdmin.clone(db),
+		DbTenant:           q.DbTenant.clone(db),
 	}
 }
 
@@ -84,33 +99,42 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:                     db,
-		DbGHLAppInstallation:   q.DbGHLAppInstallation.replaceDB(db),
-		DbGHLInstalledLocation: q.DbGHLInstalledLocation.replaceDB(db),
-		DbServerNode:           q.DbServerNode.replaceDB(db),
-		DbServiceAccount:       q.DbServiceAccount.replaceDB(db),
-		DbSystemAdmin:          q.DbSystemAdmin.replaceDB(db),
-		DbTenant:               q.DbTenant.replaceDB(db),
+		db:                 db,
+		DbGHLCompany:       q.DbGHLCompany.replaceDB(db),
+		DbGHLLocation:      q.DbGHLLocation.replaceDB(db),
+		DbPaidSubscription: q.DbPaidSubscription.replaceDB(db),
+		DbPaymentRecord:    q.DbPaymentRecord.replaceDB(db),
+		DbSchemaVersion:    q.DbSchemaVersion.replaceDB(db),
+		DbServerNode:       q.DbServerNode.replaceDB(db),
+		DbServiceAccount:   q.DbServiceAccount.replaceDB(db),
+		DbSystemAdmin:      q.DbSystemAdmin.replaceDB(db),
+		DbTenant:           q.DbTenant.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	DbGHLAppInstallation   *dbGHLAppInstallationDo
-	DbGHLInstalledLocation *dbGHLInstalledLocationDo
-	DbServerNode           *dbServerNodeDo
-	DbServiceAccount       *dbServiceAccountDo
-	DbSystemAdmin          *dbSystemAdminDo
-	DbTenant               *dbTenantDo
+	DbGHLCompany       *dbGHLCompanyDo
+	DbGHLLocation      *dbGHLLocationDo
+	DbPaidSubscription *dbPaidSubscriptionDo
+	DbPaymentRecord    *dbPaymentRecordDo
+	DbSchemaVersion    *dbSchemaVersionDo
+	DbServerNode       *dbServerNodeDo
+	DbServiceAccount   *dbServiceAccountDo
+	DbSystemAdmin      *dbSystemAdminDo
+	DbTenant           *dbTenantDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		DbGHLAppInstallation:   q.DbGHLAppInstallation.WithContext(ctx),
-		DbGHLInstalledLocation: q.DbGHLInstalledLocation.WithContext(ctx),
-		DbServerNode:           q.DbServerNode.WithContext(ctx),
-		DbServiceAccount:       q.DbServiceAccount.WithContext(ctx),
-		DbSystemAdmin:          q.DbSystemAdmin.WithContext(ctx),
-		DbTenant:               q.DbTenant.WithContext(ctx),
+		DbGHLCompany:       q.DbGHLCompany.WithContext(ctx),
+		DbGHLLocation:      q.DbGHLLocation.WithContext(ctx),
+		DbPaidSubscription: q.DbPaidSubscription.WithContext(ctx),
+		DbPaymentRecord:    q.DbPaymentRecord.WithContext(ctx),
+		DbSchemaVersion:    q.DbSchemaVersion.WithContext(ctx),
+		DbServerNode:       q.DbServerNode.WithContext(ctx),
+		DbServiceAccount:   q.DbServiceAccount.WithContext(ctx),
+		DbSystemAdmin:      q.DbSystemAdmin.WithContext(ctx),
+		DbTenant:           q.DbTenant.WithContext(ctx),
 	}
 }
 
